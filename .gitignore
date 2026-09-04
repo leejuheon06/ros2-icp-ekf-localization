@@ -1,0 +1,26 @@
+# ROS2 / colcon
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ROS bag
+*.db3
+*.mcap
+
+# Large runtime results
+results/raw/
