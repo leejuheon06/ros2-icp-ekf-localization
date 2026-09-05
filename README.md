@@ -345,6 +345,64 @@ ROS2 /odom
 
 ---
 
+## Phase 5-1 — ROS2 ↔ Gazebo Bridge
+
+**Status: Completed**
+
+Integrated `ros_gz_bridge` into `simulation.launch.py` so that the ROS2 and Gazebo communication bridge starts automatically with the simulation.
+
+Implemented:
+
+- ROS2 `/cmd_vel` → Gazebo Differential Drive
+- Gazebo odometry → ROS2 `/odom`
+- Automatic bridge startup from `simulation.launch.py`
+- Verified ROS2 velocity command without using `ign topic`
+- Verified ROS2 odometry output
+
+Target communication flow:
+
+```text
+ROS2 /cmd_vel
+      |
+      v
+ros_gz_bridge
+      |
+      v
+Gazebo Differential Drive
+      |
+      v
+AMR Motion
+      |
+      v
+Gazebo Odometry
+      |
+      v
+ros_gz_bridge
+      |
+      v
+ROS2 /odom
+```
+
+Validation:
+
+```text
+ros2 launch robot_simulation simulation.launch.py
+        ↓
+parameter_bridge automatically started
+        ↓
+ROS2 /cmd_vel available
+        ↓
+AMR moves correctly
+        ↓
+ROS2 /odom available
+        ↓
+Odometry values change during motion
+```
+
+With this step complete, the Differential Drive simulation can now be controlled entirely through ROS2 topics.
+
+---
+
 ## Phase 6 — LiDAR Simulation
 
 **Status: Planned**
@@ -598,4 +656,4 @@ ros2 launch robot_simulation simulation.launch.py
 
 Current milestone:
 
-**AMR URDF/Xacro model, Gazebo simulation, and Differential Drive motion validation completed.**
+**AMR URDF/Xacro model, Gazebo simulation, Differential Drive motion validation, and ROS2 ↔ Gazebo bridge integration completed.**

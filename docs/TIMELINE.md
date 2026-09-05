@@ -49,7 +49,26 @@
 - Changed both wheel joint axes from `<axis xyz="0 0 1"/>` to `<axis xyz="0 0 -1"/>`
 - Verified motion follows the ROS coordinate convention
 
+### ROS2 ↔ Gazebo Bridge Integration
+- Added `ros_gz_bridge` to `simulation.launch.py`
+- Configured the bridge to start automatically with Gazebo simulation
+- Connected ROS2 `/cmd_vel` to Gazebo Differential Drive
+- Connected Gazebo odometry to ROS2 `/odom`
+- Verified bridge operation without manually running `parameter_bridge`
+
+### ROS2 Communication Validation
+- Verified `/cmd_vel` is available in ROS2
+- Verified ROS2 `/cmd_vel` commands move the AMR correctly
+- Verified `/odom` is available in ROS2
+- Verified odometry values change while the robot is moving
+
+### Current Milestone
+- Differential Drive: Completed
+- ROS2 ↔ Gazebo Bridge: Completed
+- ROS2 `/cmd_vel`: Completed
+- ROS2 `/odom`: Completed
+
 ### Next Step
-- Configure ros_gz_bridge
-- Connect ROS2 `/cmd_vel`
-- Bridge Gazebo odometry to ROS2 `/odom`
+- Add a simulated 2D LiDAR sensor
+- Bridge Gazebo LaserScan to ROS2 `/scan`
+- Visualize LaserScan data in RViz2

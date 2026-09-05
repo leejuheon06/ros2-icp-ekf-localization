@@ -140,12 +140,26 @@ def generate_launch_description():
     )
 
 
+    bridge_config = os.path.join(
+    simulation_pkg,
+    'config',
+    'bridge.yaml'
+)
+
+    bridge = Node(
+    package='ros_gz_bridge',
+    executable='parameter_bridge',
+    arguments=[
+        '--ros-args',
+        '-p',
+        'config_file:=' + bridge_config
+    ],
+    output='screen'
+)
+
     return LaunchDescription([
-
         gazebo,
-
         robot_state_publisher,
-
-        spawn_robot
-
+        spawn_robot,
+        bridge
     ])

@@ -676,7 +676,7 @@ git push -u origin main
 [✓] Differential Drive
 [✓] /cmd_vel (Gazebo)
 [✓] Wheel Odometry (Gazebo)
-[ ] /odom
+[✓] /odom
 [ ] 2D LiDAR Simulation
 [ ] /scan
 [ ] IMU Simulation
@@ -910,4 +910,224 @@ Push:
 
 ``` bash
 git push origin main
+```
+
+
+------------------------------------------------------------------------
+
+# 36. ROS2 ↔ Gazebo Bridge 자동 실행
+
+`simulation.launch.py`에 `ros_gz_bridge`를 추가하여 Gazebo simulation과 함께
+bridge가 자동으로 실행되도록 구성했습니다.
+
+Simulation 실행:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+source /opt/ros/humble/setup.bash
+
+source install/setup.bash
+
+ros2 launch robot_simulation simulation.launch.py
+```
+
+Launch 로그에서 `parameter_bridge` process가 자동으로 실행되는지 확인합니다.
+
+예:
+
+``` text
+[INFO] [parameter_bridge-4]: process started with pid [...]
+```
+
+------------------------------------------------------------------------
+
+# 37. ROS2 Topic 확인
+
+새 터미널에서:
+
+``` bash
+source /opt/ros/humble/setup.bash
+
+source ~/ros2_icp_ekf_localization/install/setup.bash
+```
+
+ROS2 topic을 확인합니다.
+
+``` bash
+ros2 topic list
+```
+
+확인 대상:
+
+``` text
+/cmd_vel
+/odom
+```
+
+상세 정보 확인:
+
+``` bash
+ros2 topic info /cmd_vel
+
+ros2 topic info /odom
+```
+
+------------------------------------------------------------------------
+
+# 38. ROS2 /cmd_vel로 AMR 구동 확인
+
+이 단계부터는 `ign topic`이 아니라 ROS2 topic을 사용합니다.
+
+전진:
+
+``` bash
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2}, angular: {z: 0.0}}" -r 10
+```
+
+반시계 방향 회전:
+
+``` bash
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.5}}" -r 10
+```
+
+시계 방향 회전:
+
+``` bash
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: -0.5}}" -r 10
+```
+
+정상 동작 기준:
+
+``` text
+linear.x > 0  → Forward (+X / LiDAR 방향)
+linear.x < 0  → Backward
+angular.z > 0 → Counter-clockwise
+angular.z < 0 → Clockwise
+```
+
+------------------------------------------------------------------------
+
+# 39. ROS2 /odom 확인
+
+새 터미널에서:
+
+``` bash
+ros2 topic echo /odom
+```
+
+로봇을 움직였을 때 다음 값이 변화하는지 확인합니다.
+
+``` text
+pose.pose.position.x
+pose.pose.position.y
+pose.pose.orientation
+twist.twist.linear
+twist.twist.angular
+```
+
+ROS2 `/cmd_vel` 명령으로 AMR이 움직이고 `/odom` 값이 변화하면
+ROS2 ↔ Gazebo Bridge 연결은 정상입니다.
+
+------------------------------------------------------------------------
+
+# 40. Bridge Launch 통합 완료 상태
+
+``` text
+[✓] ros_gz_bridge
+[✓] Bridge automatic launch
+[✓] ROS2 /cmd_vel
+[✓] ROS2 → Gazebo velocity command
+[✓] Gazebo Differential Drive
+[✓] Gazebo → ROS2 odometry
+[✓] ROS2 /odom
+[✓] AMR motion validation
+```
+
+현재 데이터 흐름:
+
+``` text
+ROS2 /cmd_vel
+    ↓
+ros_gz_bridge
+    ↓
+Gazebo Differential Drive
+    ↓
+AMR Motion
+    ↓
+Gazebo Odometry
+    ↓
+ros_gz_bridge
+    ↓
+ROS2 /odom
+```
+
+------------------------------------------------------------------------
+
+# 41. Bridge 단계 Git Commit
+
+변경 사항 확인:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+
+git diff
+```
+
+이번 단계에서 수정한 파일을 staging 합니다.
+
+``` bash
+git add src/robot_simulation/launch/simulation.launch.py
+git add src/robot_simulation/config/
+git add README.md
+git add docs/COMMANDS.md
+git add docs/TIMELINE.md
+```
+
+Bridge 동작 확인 이미지 또는 GIF를 추가했다면:
+
+``` bash
+git add docs/images/
+```
+
+Commit 전 확인:
+
+``` bash
+git status
+
+git diff --cached
+```
+
+권장 commit:
+
+``` bash
+git commit -m "feat: integrate ROS2 Gazebo bridge for cmd_vel and odometry"
+```
+
+Push:
+
+``` bash
+git push origin main
+```
+
+------------------------------------------------------------------------
+
+# 42. 다음 단계
+
+다음 개발 milestone은 **2D LiDAR Simulation**입니다.
+
+목표:
+
+``` text
+Gazebo LiDAR
+    ↓
+Gazebo LaserScan
+    ↓
+ros_gz_bridge
+    ↓
+ROS2 /scan
+    ↓
+RViz LaserScan
 ```
