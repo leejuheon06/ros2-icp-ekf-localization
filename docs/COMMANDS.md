@@ -673,9 +673,9 @@ git push -u origin main
 [✓] Gravity / Collision Test
 [✓] Stable Ground Contact
 
-[ ] Differential Drive
-[ ] /cmd_vel
-[ ] Wheel Odometry
+[✓] Differential Drive
+[✓] /cmd_vel (Gazebo)
+[✓] Wheel Odometry (Gazebo)
 [ ] /odom
 [ ] 2D LiDAR Simulation
 [ ] /scan
@@ -692,7 +692,7 @@ git push -u origin main
 
 # 29. 다음 단계
 
-다음 개발 milestone은 **Differential Drive**입니다.
+Differential Drive Gazebo 직접 구동 검증까지 완료했습니다.
 
 목표:
 
@@ -720,3 +720,194 @@ AMR Motion
 8.  실행 결과 이미지 및 GIF 저장
 9.  README/TIMELINE 업데이트
 10. Git commit 및 push
+
+
+------------------------------------------------------------------------
+
+# 30. Differential Drive Gazebo Topic 확인
+
+Gazebo simulation을 실행합니다.
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+source install/setup.bash
+
+ros2 launch robot_simulation simulation.launch.py
+```
+
+Gazebo Transport topic을 확인합니다.
+
+``` bash
+ign topic -l | grep -E "cmd_vel|odom|odometry|icp_ekf_amr"
+```
+
+확인된 topic:
+
+``` text
+/model/icp_ekf_amr/odometry
+/model/icp_ekf_amr/tf
+```
+
+------------------------------------------------------------------------
+
+# 31. Differential Drive 직접 구동 테스트
+
+전진:
+
+``` bash
+ign topic -t /cmd_vel -m ignition.msgs.Twist -p "linear: {x: 0.2}, angular: {z: 0.0}"
+```
+
+후진:
+
+``` bash
+ign topic -t /cmd_vel -m ignition.msgs.Twist -p "linear: {x: -0.2}, angular: {z: 0.0}"
+```
+
+반시계 방향 회전:
+
+``` bash
+ign topic -t /cmd_vel -m ignition.msgs.Twist -p "linear: {x: 0.0}, angular: {z: 0.5}"
+```
+
+시계 방향 회전:
+
+``` bash
+ign topic -t /cmd_vel -m ignition.msgs.Twist -p "linear: {x: 0.0}, angular: {z: -0.5}"
+```
+
+정상 동작 기준:
+
+``` text
+linear.x > 0  → Forward (+X / LiDAR 방향)
+linear.x < 0  → Backward
+angular.z > 0 → Counter-clockwise
+angular.z < 0 → Clockwise
+```
+
+------------------------------------------------------------------------
+
+# 32. Gazebo Odometry 확인
+
+``` bash
+ign topic -e -t /model/icp_ekf_amr/odometry
+```
+
+로봇이 움직일 때 position 및 orientation 값이 변화하는지 확인합니다.
+
+------------------------------------------------------------------------
+
+# 33. Wheel Joint Axis 방향 수정
+
+초기 테스트에서 다음 문제가 발생했습니다.
+
+``` text
+linear.x > 0  → 로봇이 뒤로 이동
+angular.z > 0 → 로봇이 오른쪽으로 회전
+```
+
+기존 wheel joint axis:
+
+``` xml
+<axis xyz="0 0 1"/>
+```
+
+수정:
+
+``` xml
+<axis xyz="0 0 -1"/>
+```
+
+`left_wheel_joint`와 `right_wheel_joint` 모두 수정했습니다.
+
+수정 후 다시 빌드합니다.
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+colcon build   --symlink-install   --packages-select robot_description robot_simulation
+
+source install/setup.bash
+```
+
+Gazebo를 다시 실행합니다.
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py
+```
+
+수정 후 확인 결과:
+
+``` text
+[✓] Forward
+[✓] Backward
+[✓] Counter-clockwise Rotation
+[✓] Clockwise Rotation
+[✓] Gazebo Odometry
+```
+
+------------------------------------------------------------------------
+
+# 34. 다음 단계
+
+다음 개발 milestone은 **ROS2 ↔ Gazebo Bridge**입니다.
+
+목표:
+
+``` text
+ROS2 /cmd_vel
+    ↓
+ros_gz_bridge
+    ↓
+Gazebo Differential Drive
+    ↓
+AMR Motion
+    ↓
+Gazebo Odometry
+    ↓
+ros_gz_bridge
+    ↓
+ROS2 /odom
+```
+
+------------------------------------------------------------------------
+
+# 35. Git Commit
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+
+git diff
+```
+
+변경 파일을 staging 합니다.
+
+``` bash
+git add src/robot_description/urdf/amr.urdf.xacro
+git add README.md
+git add COMMANDS.md
+git add TIMELINE.md
+```
+
+Staging 결과를 확인합니다.
+
+``` bash
+git status
+
+git diff --cached
+```
+
+Commit:
+
+``` bash
+git commit -m "feat: add differential drive and validate robot motion"
+```
+
+Push:
+
+``` bash
+git push origin main
+```

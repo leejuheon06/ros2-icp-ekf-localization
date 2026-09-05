@@ -65,7 +65,7 @@
             <origin xyz="0 0 0.10"
                     rpy="0 0 0"/>
 
-            <mass value="15.0"/>    # 무게(kg)
+            <mass value="15.0"/> 
 
             <inertia
                 ixx="0.25"
@@ -127,7 +127,7 @@
         <origin xyz="0 0.22 0"
                 rpy="1.5708 0 0"/>
 
-        <axis xyz="0 0 1"/>
+        <axis xyz="0 0 -1"/>
 
     </joint>
 
@@ -183,7 +183,7 @@
         <origin xyz="0 -0.22 0"
                 rpy="1.5708 0 0"/>
 
-        <axis xyz="0 0 1"/>
+        <axis xyz="0 0 -1"/>
 
     </joint>
 
@@ -354,6 +354,26 @@
     <mu2>0.01</mu2>
     </gazebo>
 
+    <!-- ========================= -->
+    <!-- DIFFERENTIAL DRIVE -->
+    <!-- ========================= -->
 
+    <gazebo>
+        <plugin
+            filename="ignition-gazebo-diff-drive-system"
+            name="ignition::gazebo::systems::DiffDrive">
+
+            <left_joint>left_wheel_joint</left_joint>
+            <right_joint>right_wheel_joint</right_joint>
+
+            <wheel_separation>0.44</wheel_separation>
+            <wheel_radius>0.08</wheel_radius>
+
+            <topic>cmd_vel</topic>
+
+            <odom_publish_frequency>50</odom_publish_frequency>
+
+        </plugin>
+    </gazebo>
 
 </robot>

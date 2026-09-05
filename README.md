@@ -284,28 +284,63 @@ Stable Ground Contact
 
 ## Phase 5 — Differential Drive
 
-**Status: Planned**
+**Status: Completed**
 
-Next objectives:
+Implemented:
 
-- Configure differential-drive system
-- Connect left/right wheel joints
-- Receive `/cmd_vel`
-- Implement forward/backward motion
-- Implement rotation
-- Generate wheel odometry
+- Gazebo Fortress Differential Drive system
+- `left_wheel_joint` / `right_wheel_joint` connection
+- Wheel separation: `0.44 m`
+- Wheel radius: `0.08 m`
+- `/cmd_vel` velocity command
+- Wheel odometry generation
 
-Expected topics:
+Verified motion:
+
+- `linear.x > 0` → Forward (+X / LiDAR direction)
+- `linear.x < 0` → Backward
+- `angular.z > 0` → Counter-clockwise rotation
+- `angular.z < 0` → Clockwise rotation
+
+During the initial motion test, positive `linear.x` moved the robot backward and positive `angular.z` rotated the robot clockwise.
+
+The issue was caused by the wheel joint axis direction.
+
+Changed both wheel joint axes from:
+
+```xml
+<axis xyz="0 0 1"/>
+```
+
+to:
+
+```xml
+<axis xyz="0 0 -1"/>
+```
+
+After rebuilding and restarting Gazebo, forward/backward motion and left/right rotation were verified successfully.
+
+Current Gazebo topics:
 
 ```text
 /cmd_vel
-/odom
+/model/icp_ekf_amr/odometry
+/model/icp_ekf_amr/tf
 ```
 
-Expected TF:
+Next objective:
 
 ```text
-odom → base_link
+ROS2 /cmd_vel
+      |
+      v
+ros_gz_bridge
+      |
+      v
+Gazebo Differential Drive
+      |
+      v
+ROS2 /odom
 ```
 
 ---
@@ -555,7 +590,7 @@ ros2 launch robot_simulation simulation.launch.py
 ## Progress
 
 ```text
-[████████░░░░░░░░░░░░] AMR / Simulation
+[████████████░░░░░░░░] AMR / Simulation
 [░░░░░░░░░░░░░░░░░░░░] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
 [░░░░░░░░░░░░░░░░░░░░] Evaluation
@@ -563,4 +598,4 @@ ros2 launch robot_simulation simulation.launch.py
 
 Current milestone:
 
-**AMR URDF/Xacro model and basic Gazebo simulation completed.**
+**AMR URDF/Xacro model, Gazebo simulation, and Differential Drive motion validation completed.**
