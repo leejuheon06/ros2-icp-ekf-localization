@@ -677,8 +677,8 @@ git push -u origin main
 [✓] /cmd_vel (Gazebo)
 [✓] Wheel Odometry (Gazebo)
 [✓] /odom
-[ ] 2D LiDAR Simulation
-[ ] /scan
+[✓] 2D LiDAR Simulation
+[✓] /scan
 [ ] IMU Simulation
 [ ] /imu
 [ ] Warehouse World
@@ -1131,3 +1131,166 @@ ROS2 /scan
     ↓
 RViz LaserScan
 ```
+
+------------------------------------------------------------------------
+
+# 43. Gazebo Wheel Joint State 확인
+
+``` bash
+ign topic -l | grep -E "joint|joint_state"
+```
+
+``` bash
+ign topic -i -t /model/icp_ekf_amr/joint_state
+```
+
+``` bash
+ign topic -e -t /model/icp_ekf_amr/joint_state
+```
+
+확인 대상:
+
+``` text
+left_wheel_joint
+right_wheel_joint
+```
+
+------------------------------------------------------------------------
+
+# 44. ROS2 /joint_states 및 Wheel TF 확인
+
+Gazebo joint state가 `ros_gz_bridge`를 통해 ROS2로 전달되는지 확인합니다.
+
+``` bash
+ros2 topic info /joint_states --verbose
+ros2 topic echo /joint_states --once
+```
+
+로봇을 움직이는 동안 wheel position 값이 변화하는지 확인합니다.
+
+``` bash
+ros2 topic echo /joint_states
+```
+
+Wheel TF 확인:
+
+``` bash
+ros2 run tf2_ros tf2_echo base_link left_wheel_link
+ros2 run tf2_ros tf2_echo base_link right_wheel_link
+```
+
+별도의 `joint_state_publisher`를 실행하지 않아도 wheel TF와 RViz2의 좌/우 wheel이 표시되면 정상입니다.
+
+------------------------------------------------------------------------
+
+# 45. Gazebo / ROS2 LiDAR Topic 확인
+
+``` bash
+ign topic -l | grep -E "scan|lidar"
+ign topic -e -t /scan
+```
+
+ROS2 bridge 확인:
+
+``` bash
+ros2 topic list | grep scan
+ros2 topic type /scan
+ros2 topic echo /scan --once | head -20
+```
+
+정상 message type:
+
+``` text
+sensor_msgs/msg/LaserScan
+```
+
+------------------------------------------------------------------------
+
+# 46. LiDAR Publish Frequency 확인
+
+``` bash
+ros2 topic hz /scan
+```
+
+현재 LiDAR 설정의 목표 update rate는 약 `10 Hz`입니다.
+
+------------------------------------------------------------------------
+
+# 47. LiDAR TF / Frame 확인
+
+``` bash
+ros2 run tf2_ros tf2_echo base_link laser_link
+```
+
+``` bash
+ros2 topic echo /scan --once | head -10
+```
+
+초기 테스트에서는 Gazebo sensor frame과 ROS2 TF frame이 일치하지 않아 RViz2에서 다음 로그가 반복되었습니다.
+
+``` text
+Message Filter dropping message
+discarding message because the queue is full
+```
+
+LiDAR sensor frame을 ROS2 TF tree의 `laser_link`와 일치시킨 후 해당 로그가 사라졌습니다.
+
+------------------------------------------------------------------------
+
+# 48. RViz2 LaserScan 시각화
+
+``` bash
+rviz2
+```
+
+LaserScan display 확인:
+
+``` text
+Topic: /scan
+Status: Ok
+```
+
+Gazebo world의 static obstacle이 RViz2에서 LaserScan point로 표시되는지 확인합니다.
+
+다음 RViz2 시작 로그는 정상 렌더링과 LaserScan 표시가 된다면 LiDAR 오류가 아닙니다.
+
+``` text
+Warning: Ignoring XDG_SESSION_TYPE=wayland on Gnome.
+Stereo is NOT SUPPORTED
+OpenGl version: 4.6 (GLSL 4.6)
+```
+
+------------------------------------------------------------------------
+
+# 49. LiDAR 단계 완료 상태
+
+``` text
+[✓] Gazebo GPU LiDAR
+[✓] 360° scan / 360 samples
+[✓] 0.10 m ~ 10.0 m range
+[✓] 10 Hz update rate
+[✓] Gazebo /scan → ros_gz_bridge → ROS2 /scan
+[✓] LiDAR TF alignment
+[✓] RViz2 LaserScan
+[✓] Static obstacle detection
+[✓] RViz Message Filter frame issue resolved
+```
+
+------------------------------------------------------------------------
+
+# 50. 다음 단계
+
+다음 개발 milestone은 **IMU Simulation**입니다.
+
+``` text
+Gazebo IMU
+    ↓
+Gazebo IMU Message
+    ↓
+ros_gz_bridge
+    ↓
+ROS2 /imu
+    ↓
+Localization Pipeline
+```
+

@@ -247,7 +247,7 @@ base_footprint
 
 ## Phase 4 — Gazebo Simulation Environment
 
-**Status: In Progress**
+**Status: Completed**
 
 Created the first Gazebo world:
 
@@ -403,25 +403,93 @@ With this step complete, the Differential Drive simulation can now be controlled
 
 ---
 
-## Phase 6 — LiDAR Simulation
+## Phase 5-2 — Gazebo Joint State Integration
 
-**Status: Planned**
+**Status: Completed**
 
-Add a simulated 2D LiDAR sensor.
+Integrated Gazebo wheel joint states with ROS2 so that the continuous drive-wheel joints can be represented correctly in the ROS2 TF tree and RViz2.
 
-Target output:
+Implemented:
+
+- Gazebo `JointStatePublisher` for `left_wheel_joint` and `right_wheel_joint`
+- Gazebo joint state → ROS2 `/joint_states` bridge
+- `robot_state_publisher` integration using wheel joint states
+- Dynamic TF generation for `left_wheel_link` and `right_wheel_link`
+- RViz2 wheel visualization without relying on a standalone `joint_state_publisher` for simulation state
+
+Data flow:
 
 ```text
-/scan
+Gazebo Wheel Joints
+      |
+      v
+Gazebo JointStatePublisher
+      |
+      v
+ros_gz_bridge
+      |
+      v
+ROS2 /joint_states
+      |
+      v
+robot_state_publisher
+      |
+      v
+/tf
+      |
+      v
+RViz2
 ```
 
-Tasks:
+This resolved the issue where fixed links were visible in RViz2 but the continuous left/right wheel links were missing because wheel joint states were unavailable to `robot_state_publisher`.
 
-- Configure LiDAR range
-- Configure angular resolution
-- Configure update rate
-- Connect Gazebo LaserScan to ROS2
-- Visualize LaserScan in RViz2
+---
+
+## Phase 6 — LiDAR Simulation
+
+**Status: Completed**
+
+Integrated a simulated 360° 2D GPU LiDAR sensor and connected the Gazebo LaserScan output to ROS2.
+
+Configuration:
+
+- Horizontal field of view: `360°`
+- Samples: `360`
+- Minimum range: `0.10 m`
+- Maximum range: `10.0 m`
+- Update rate: `10 Hz`
+- ROS2 output: `/scan`
+
+Implemented:
+
+- Gazebo GPU LiDAR sensor on `laser_link`
+- Gazebo Sensors system using Ogre2
+- Gazebo `/scan` → ROS2 `/scan` bridge
+- LiDAR sensor frame alignment with the ROS2 TF tree
+- RViz2 LaserScan visualization
+- Static obstacle detection test in Gazebo
+
+Data flow:
+
+```text
+Gazebo GPU LiDAR
+      |
+      v
+Gazebo /scan
+      |
+      v
+ros_gz_bridge
+      |
+      v
+ROS2 /scan
+      |
+      v
+RViz2 LaserScan
+```
+
+During initial RViz2 validation, LaserScan messages were dropped because the Gazebo LiDAR frame did not match an available ROS2 TF frame. Aligning the sensor frame with `laser_link` resolved the RViz Message Filter queue overflow.
+
+Final validation confirmed that static obstacles in the Gazebo world are detected and displayed as LaserScan points in RViz2.
 
 ---
 
@@ -648,7 +716,7 @@ ros2 launch robot_simulation simulation.launch.py
 ## Progress
 
 ```text
-[████████████░░░░░░░░] AMR / Simulation
+[████████████████░░░░] AMR / Simulation
 [░░░░░░░░░░░░░░░░░░░░] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
 [░░░░░░░░░░░░░░░░░░░░] Evaluation
@@ -656,4 +724,4 @@ ros2 launch robot_simulation simulation.launch.py
 
 Current milestone:
 
-**AMR URDF/Xacro model, Gazebo simulation, Differential Drive motion validation, and ROS2 ↔ Gazebo bridge integration completed.**
+**AMR URDF/Xacro model, Gazebo simulation, Differential Drive, ROS2 ↔ Gazebo bridge, wheel joint-state integration, and 2D LiDAR simulation completed. Next: IMU simulation.**

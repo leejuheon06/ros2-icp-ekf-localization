@@ -72,3 +72,42 @@
 - Add a simulated 2D LiDAR sensor
 - Bridge Gazebo LaserScan to ROS2 `/scan`
 - Visualize LaserScan data in RViz2
+
+## 2026-09-09
+
+### Gazebo Joint State Integration
+- Added Gazebo `JointStatePublisher` for the continuous left/right wheel joints
+- Bridged Gazebo wheel joint states to ROS2 `/joint_states`
+- Connected `/joint_states` with `robot_state_publisher` for dynamic wheel TF generation
+- Verified left/right wheel links are displayed correctly in RViz2 without relying on a standalone `joint_state_publisher` for simulation state
+
+### 2D LiDAR Simulation
+- Added a 360° Gazebo GPU LiDAR sensor
+- Configured 360 scan samples
+- Configured 0.10 m minimum range and 10.0 m maximum range
+- Configured 10 Hz update rate
+- Added the Gazebo Sensors system using Ogre2
+- Bridged Gazebo `/scan` to ROS2 `/scan`
+- Visualized `sensor_msgs/msg/LaserScan` in RViz2
+- Verified static obstacle detection as LaserScan points in RViz2
+
+### Issues Resolved
+- Identified missing wheel visualization in RViz2 as a continuous-joint state / TF issue
+- Replaced the temporary standalone joint-state visualization approach with Gazebo-derived wheel joint states
+- Identified Gazebo LiDAR sensor-frame mismatch as the cause of repeated RViz2 Message Filter queue overflow
+- Aligned the LiDAR sensor frame with the ROS2 TF tree
+- Verified that the `discarding message because the queue is full` log no longer occurs during LaserScan visualization
+
+### Current Milestone
+- Gazebo Joint State Integration: Completed
+- ROS2 `/joint_states`: Completed
+- 2D LiDAR Simulation: Completed
+- ROS2 `/scan`: Completed
+- RViz2 LaserScan Visualization: Completed
+- Static Obstacle Detection: Completed
+
+### Next Step
+- Add simulated IMU measurements
+- Bridge Gazebo IMU data to ROS2 `/imu`
+- Validate IMU data before beginning the localization pipeline
+
