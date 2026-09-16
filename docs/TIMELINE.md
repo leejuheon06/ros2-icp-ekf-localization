@@ -176,6 +176,32 @@
 - Confirmed that Map Server does not publish `map -> odom`; therefore a missing `map` Fixed Frame in the TF tree is expected when no SLAM/localization node is active
 - Observed an RViz2 GLSL map-rendering warning and confirmed that it does not block map visualization when the Map display remains `Status: Ok`
 
+### Custom ICP Localization — Input Data Preparation
+- Created the `icp_localization` C++ package
+- Added ROS2 `/scan` subscription using `sensor_msgs/msg/LaserScan`
+- Filtered invalid LiDAR range values
+- Converted each valid LiDAR beam from polar coordinates to `(x, y)` points
+- Published the converted scan as `sensor_msgs/msg/PointCloud2` on `/icp_scan_points`
+- Verified the raw `/scan` data and `/icp_scan_points` overlap correctly in RViz2
+- Added ROS2 `/map` subscription using `nav_msgs/msg/OccupancyGrid`
+- Matched the Map Server QoS using `Reliable + Transient Local`
+- Extracted occupied map cells using an occupancy threshold of `65`
+- Converted the 1D OccupancyGrid index into row / column coordinates
+- Converted occupied grid-cell centers into metric map-frame `(x, y)` coordinates
+- Published the reference map points as `sensor_msgs/msg/PointCloud2` on `/icp_map_points`
+- Configured `/icp_map_points` with `Reliable + Transient Local` QoS
+- Verified the Occupancy Grid and reference point cloud overlap correctly in RViz2
+
+### ICP Input Validation Artifacts
+- Added `docs/images/10_laserscan_pointcloud_overlap_rviz.gif`
+- Added `docs/images/11_occupancygrid_reference_pointcloud_rviz.gif`
+
+### Issues Resolved
+- Identified that a one-time `/icp_map_points` publication could be missed by RViz2 when using the default volatile QoS
+- Changed the reference point-cloud publisher to `Reliable + Transient Local` so late subscribers can receive the latest map point cloud
+- Used the same durable QoS profile for `/map` subscription to match Nav2 Map Server
+- Confirmed that temporary `map -> odom` static TF may be used only for RViz2 input visualization while the real localization transform is not yet implemented
+
 ### Current Milestone
 - IMU Simulation: Completed
 - Benchmark Localization World: Completed
@@ -185,11 +211,15 @@
 - Occupancy Grid Generation: Completed
 - Map Save: Completed
 - Saved Map Reload Validation: Completed
+- ICP C++ Package: In Progress
+- LaserScan -> PointCloud2: Completed
+- OccupancyGrid -> Reference PointCloud: Completed
+- ICP Input RViz2 Validation: Completed
 
 ### Next Step
-- Begin Custom ICP Localization implementation
-- Convert the saved occupancy map into a reference point cloud
-- Convert ROS2 `/scan` LaserScan data into 2D points
-- Implement correspondence search and rigid transform estimation step by step
-- Validate ICP pose output before integrating the EKF
+- Transform `/icp_scan_points` from `laser_link` into the `map` coordinate frame
+- Use odometry / TF as the initial pose estimate
+- Implement nearest-neighbor correspondence search
+- Add correspondence filtering / outlier rejection
+- Implement 2D rigid transform estimation and ICP iteration
 

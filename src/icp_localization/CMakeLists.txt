@@ -14,16 +14,18 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
-add_executable(test_node src/test_node.cpp)
+add_executable(icp_localization_node src/icp_localization_node.cpp)
 
 ament_target_dependencies(
-    test_node
-    rclcpp
+  icp_localization_node
+  rclcpp
+  sensor_msgs
+  nav_msgs
 )
 
 install(
-    TARGETS test_node
-    DESTINATION lib/${PROJECT_NAME}
+  TARGETS icp_localization_node
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

@@ -133,19 +133,30 @@ ros2_icp_ekf_localization/
 │   │   └── urdf/
 │   │       └── amr.urdf.xacro
 │   │
-│   └── robot_simulation/
-│       ├── config/
-│       │   ├── bridge.yaml
-│       │   └── slam_toolbox.yaml
-│       ├── launch/
-│       │   └── simulation.launch.py
-│       └── worlds/
-│           ├── empty_world.sdf
-│           └── localization_world.sdf
+│   ├── robot_simulation/
+│   │   ├── config/
+│   │   │   ├── bridge.yaml
+│   │   │   └── slam_toolbox.yaml
+│   │   ├── launch/
+│   │   │   └── simulation.launch.py
+│   │   └── worlds/
+│   │       ├── empty_world.sdf
+│   │       └── localization_world.sdf
+│   │
+│   └── icp_localization/
+│       ├── CMakeLists.txt
+│       ├── package.xml
+│       └── src/
+│           └── icp_localization_node.cpp
 │
 ├── maps/
 │   ├── localization_map.pgm
 │   └── localization_map.yaml
+│
+├── docs/
+│   ├── COMMANDS.md
+│   ├── TIMELINE.md
+│   └── images/
 │
 ├── README.md
 └── .gitignore
@@ -250,6 +261,10 @@ base_footprint
       +---- rear_caster_link
 ```
 
+### RViz2 Robot Model Validation
+
+![RViz2 Robot Model](docs/images/01_robot_model.png)
+
 ---
 
 ## Phase 4 — Gazebo Simulation Environment
@@ -326,6 +341,16 @@ to:
 ```
 
 After rebuilding and restarting Gazebo, forward/backward motion and left/right rotation were verified successfully.
+
+### Differential Drive Validation
+
+Forward motion:
+
+![Differential Drive Straight](docs/images/02_differential_drive_gazebo_straight.gif)
+
+Rotation test:
+
+![Differential Drive Turn](docs/images/02_differential_drive_gazebo_turn.gif)
 
 Current Gazebo topics:
 
@@ -407,6 +432,10 @@ Odometry values change during motion
 ```
 
 With this step complete, the Differential Drive simulation can now be controlled entirely through ROS2 topics.
+
+### ROS2 Bridge Validation
+
+![ROS2 Gazebo Bridge](docs/images/03_differential_drive_ROS2_bridge.gif)
 
 ---
 
@@ -498,6 +527,10 @@ During initial RViz2 validation, LaserScan messages were dropped because the Gaz
 
 Final validation confirmed that static obstacles in the Gazebo world are detected and displayed as LaserScan points in RViz2.
 
+### Joint State and LiDAR Visualization
+
+![Joint States and LiDAR Scan](docs/images/04_joint_states_lidar_scan_rviz.gif)
+
 ---
 
 ## Phase 7 — IMU Simulation
@@ -566,6 +599,10 @@ The environment intentionally contains asymmetric geometric features, including:
 - An L-shaped wall feature
 
 The asymmetric layout reduces geometric ambiguity and provides distinct LiDAR features for scan matching and localization evaluation.
+
+### Benchmark World Validation
+
+![Localization Benchmark World](docs/images/07_localization_world_gazebo.png.png)
 
 ### World and Initial Pose Selection
 
@@ -644,6 +681,14 @@ LaserScan        odom -> base_footprint
 
 A 2D Occupancy Grid was successfully generated in RViz2.
 
+### SLAM Toolbox Mapping Validation
+
+![SLAM Toolbox Mapping](docs/images/08_slam_toolbox_mapping_rviz.gif)
+
+Final generated Occupancy Grid:
+
+![SLAM Toolbox Generated Map](docs/images/08_slam_toolbox_generated_map_rviz.png)
+
 Current generated map information:
 
 - Resolution: `0.05 m/cell`
@@ -672,57 +717,139 @@ Durability: Transient Local
 
 The saved Occupancy Grid was successfully received and displayed in RViz2 with `Map -> Status: Ok`.
 
+![Saved Map Reload Validation](docs/images/09_saved_map_reload_rviz.png)
+
 When only Map Server is running, `map -> odom` is not published. Therefore, RViz2 may report that the `map` Fixed Frame does not exist in the TF tree even though the saved Occupancy Grid itself is loaded correctly. A localization node will provide the required map-relative transform in later stages.
-
-Recommended result images:
-
-```text
-docs/images/07_localization_world_gazebo.png
-docs/images/08_slam_toolbox_generated_map_rviz.png
-docs/images/09_saved_map_reload_rviz.png
-```
 
 ---
 
 ## Phase 9 — ICP Localization
 
-**Status: Planned**
+**Status: In Progress**
 
-Implement 2D ICP localization in C++.
+The custom 2D ICP localization package is being implemented in C++ using ROS2 sensor and map data directly.
 
-Main processing pipeline:
+Current processing pipeline:
 
 ```text
-/map
-  |
-  v
-Reference Point Cloud
-        +
-Current LiDAR Scan
-        |
-        v
-Correspondence Search
-        |
-        v
-Rigid Transform Estimation
-        |
-        v
-Iterative Optimization
-        |
-        v
-ICP Pose
-[x, y, yaw]
+ROS2 /scan
+   |
+   v
+LaserScan Range Filtering
+   |
+   v
+Polar -> Cartesian Conversion
+   |
+   v
+Current Scan Point Cloud
+   |
+   +------------------------------+
+                                  |
+ROS2 /map                         |
+   |                              |
+   v                              |
+Occupied Cell Extraction          |
+   |                              |
+   v                              |
+Grid Index -> Map Coordinate      |
+   |                              |
+   v                              |
+Reference Map Point Cloud --------+
+                                  |
+                                  v
+                         ICP Registration
+                           (Next Step)
 ```
 
-Planned implementation topics include:
+### ICP ROS2 Package
 
-- LaserScan-to-point-cloud conversion
-- Nearest-neighbor correspondence search
-- Outlier rejection
-- SVD-based rigid transformation estimation
-- Iterative pose optimization
-- Convergence criteria
-- ICP fitness/error evaluation
+Created the C++ package:
+
+```text
+src/icp_localization/
+├── CMakeLists.txt
+├── package.xml
+└── src/
+    └── icp_localization_node.cpp
+```
+
+Current dependencies:
+
+- `rclcpp`
+- `sensor_msgs`
+- `nav_msgs`
+
+### LaserScan to 2D Point Cloud
+
+Implemented:
+
+- ROS2 `/scan` subscription
+- Invalid range filtering using finite values and sensor range limits
+- LiDAR beam-angle calculation using `angle_min` and `angle_increment`
+- Polar-to-Cartesian conversion
+- Internal `Point2D` representation
+- ROS2 `sensor_msgs/msg/PointCloud2` publication on `/icp_scan_points`
+
+Coordinate conversion:
+
+```text
+angle = angle_min + i * angle_increment
+x = range * cos(angle)
+y = range * sin(angle)
+```
+
+The original `/scan` visualization and the converted `/icp_scan_points` were displayed simultaneously in RViz2. The point sets overlapped correctly, validating the scan conversion used as the current ICP input.
+
+![LaserScan PointCloud Overlap](docs/images/10_laserscan_pointcloud_overlap_rviz.gif)
+
+### OccupancyGrid to Reference Point Cloud
+
+Implemented:
+
+- ROS2 `/map` subscription using `Reliable + Transient Local` QoS
+- Occupied-cell extraction from `nav_msgs/msg/OccupancyGrid`
+- 1D map index conversion to row and column
+- Grid-cell center conversion to map-frame metric coordinates
+- ROS2 `sensor_msgs/msg/PointCloud2` publication on `/icp_map_points`
+- `Reliable + Transient Local` QoS for the static reference point cloud
+
+Grid conversion:
+
+```text
+column = index % width
+row    = index / width
+
+x = origin_x + (column + 0.5) * resolution
+y = origin_y + (row + 0.5) * resolution
+```
+
+Occupied cells currently use an occupancy threshold of `65` or greater. The generated reference points follow the walls and obstacles of the saved Occupancy Grid in RViz2.
+
+![OccupancyGrid Reference PointCloud](docs/images/11_occupancygrid_reference_pointcloud_rviz.gif)
+
+### Current ICP Input Status
+
+```text
+Current Scan Points
+Topic: /icp_scan_points
+Frame: laser_link
+
+Reference Map Points
+Topic: /icp_map_points
+Frame: map
+```
+
+The two ICP inputs are now available, but they cannot yet be compared directly because they are expressed in different coordinate frames.
+
+Next implementation steps:
+
+- Transform current scan points into the map coordinate frame using an initial pose estimate
+- Use odometry as the initial motion estimate
+- Implement nearest-neighbor correspondence search
+- Reject invalid / distant correspondences
+- Estimate the 2D rigid transformation
+- Iterate until convergence
+- Publish and evaluate the ICP pose
 
 ---
 
@@ -931,11 +1058,11 @@ yaw:=1.5708
 ```text
 [████████████████████] AMR / Simulation
 [████████████████████] Sensors / Mapping
-[░░░░░░░░░░░░░░░░░░░░] ICP Localization
+[██████░░░░░░░░░░░░░░░░] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
 [██░░░░░░░░░░░░░░░░░░] Evaluation Infrastructure
 ```
 
 Current milestone:
 
-**AMR simulation, ROS2 ↔ Gazebo bridge, wheel joint-state integration, 2D LiDAR, IMU, benchmark localization world, odometry TF, SLAM Toolbox mapping, Occupancy Grid generation, and saved-map reload validation completed. Next: Custom ICP localization.**
+**AMR simulation, sensor integration, benchmark mapping, and saved-map validation are complete. Custom ICP input preparation is in progress: LaserScan-to-PointCloud2 and OccupancyGrid-to-reference-point-cloud conversion have been validated in RViz2. Next: transform scan points into the map frame and begin correspondence search.**

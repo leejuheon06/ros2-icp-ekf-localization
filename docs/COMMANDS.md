@@ -1839,3 +1839,422 @@ Iterative Optimization
 ICP Pose [x, y, yaw]
 ```
 
+------------------------------------------------------------------------
+
+# 68. Custom ICP Localization Package 생성
+
+프로젝트 `src` 디렉터리에서 C++ package를 생성합니다.
+
+``` bash
+cd ~/ros2_icp_ekf_localization/src
+
+ros2 pkg create icp_localization \
+  --build-type ament_cmake \
+  --dependencies rclcpp sensor_msgs
+```
+
+Occupancy Grid를 사용하기 위해 `package.xml`과 `CMakeLists.txt`에 `nav_msgs` dependency를 추가합니다.
+
+`package.xml`:
+
+``` xml
+<depend>rclcpp</depend>
+<depend>sensor_msgs</depend>
+<depend>nav_msgs</depend>
+```
+
+`CMakeLists.txt`:
+
+``` cmake
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+```
+
+------------------------------------------------------------------------
+
+# 69. ICP Package Build
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+colcon build \
+  --symlink-install \
+  --packages-select icp_localization
+
+source install/setup.bash
+```
+
+정상 build 결과 예:
+
+``` text
+Finished <<< icp_localization
+Summary: 1 package finished
+```
+
+------------------------------------------------------------------------
+
+# 70. LaserScan -> 2D Point 변환 Node 실행
+
+먼저 benchmark simulation을 실행합니다.
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py \
+world:=localization_world.sdf \
+x:=0.0 \
+y:=-3.8 \
+yaw:=1.5708
+```
+
+새 터미널에서 ICP node를 실행합니다.
+
+``` bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_icp_ekf_localization/install/setup.bash
+
+ros2 run icp_localization icp_localization_node
+```
+
+LaserScan 변환 결과 확인:
+
+``` text
+Converted LaserScan to XXX 2D points
+```
+
+변환 과정:
+
+``` text
+/scan
+  ↓
+finite / range filtering
+  ↓
+angle = angle_min + i * angle_increment
+  ↓
+x = range * cos(angle)
+y = range * sin(angle)
+  ↓
+2D Point
+```
+
+------------------------------------------------------------------------
+
+# 71. /icp_scan_points PointCloud2 확인
+
+Topic 확인:
+
+``` bash
+ros2 topic list | grep icp
+```
+
+Message type 확인:
+
+``` bash
+ros2 topic type /icp_scan_points
+```
+
+정상 결과:
+
+``` text
+sensor_msgs/msg/PointCloud2
+```
+
+Publish rate 확인:
+
+``` bash
+ros2 topic hz /icp_scan_points
+```
+
+LiDAR update rate와 동일하게 약 `10 Hz`인지 확인합니다.
+
+RViz2 실행:
+
+``` bash
+rviz2
+```
+
+검증 설정:
+
+``` text
+Fixed Frame: laser_link
+LaserScan Topic: /scan
+PointCloud2 Topic: /icp_scan_points
+```
+
+정상 결과:
+
+``` text
+/scan과 /icp_scan_points가 동일한 장애물 윤곽에서 겹쳐 표시됨
+```
+
+검증 이미지:
+
+``` text
+docs/images/10_laserscan_pointcloud_overlap_rviz.gif
+```
+
+------------------------------------------------------------------------
+
+# 72. ICP Reference Map 실행 환경
+
+저장된 Occupancy Grid를 사용하기 위해 Map Server를 실행합니다.
+
+``` bash
+ros2 run nav2_map_server map_server \
+--ros-args \
+-p yaml_filename:=$HOME/ros2_icp_ekf_localization/maps/localization_map.yaml \
+-p use_sim_time:=true
+```
+
+Lifecycle 활성화:
+
+``` bash
+ros2 lifecycle set /map_server configure
+ros2 lifecycle set /map_server activate
+```
+
+상태 확인:
+
+``` bash
+ros2 lifecycle get /map_server
+```
+
+정상 상태:
+
+``` text
+active [3]
+```
+
+------------------------------------------------------------------------
+
+# 73. ICP Node의 /map 수신 확인
+
+ICP node의 `/map` subscriber는 Map Server QoS와 맞추기 위해 다음 profile을 사용합니다.
+
+``` text
+History: Keep Last
+Depth: 1
+Reliability: Reliable
+Durability: Transient Local
+```
+
+ICP node 실행:
+
+``` bash
+ros2 run icp_localization icp_localization_node
+```
+
+정상 출력 예:
+
+``` text
+Map received: width=199, height=198, resolution=0.050
+```
+
+Occupancy Grid 정보:
+
+``` text
+Width: 199 cells
+Height: 198 cells
+Resolution: 0.05 m/cell
+```
+
+------------------------------------------------------------------------
+
+# 74. OccupancyGrid -> Reference PointCloud 변환 확인
+
+Reference point 생성 로그 확인:
+
+``` text
+Converted OccupancyGrid to XXXX reference points
+```
+
+현재 occupied-cell 기준:
+
+``` text
+occupancy >= 65
+```
+
+Grid index 변환:
+
+``` text
+column = index % width
+row    = index / width
+```
+
+Map metric coordinate 변환:
+
+``` text
+x = origin_x + (column + 0.5) * resolution
+y = origin_y + (row + 0.5) * resolution
+```
+
+`+0.5`는 각 grid cell의 모서리가 아니라 중심점을 reference point로 사용하기 위한 값입니다.
+
+------------------------------------------------------------------------
+
+# 75. /icp_map_points PointCloud2 확인
+
+Topic 확인:
+
+``` bash
+ros2 topic list | grep icp
+```
+
+현재 ICP 입력 topic:
+
+``` text
+/icp_scan_points
+/icp_map_points
+```
+
+Message type 확인:
+
+``` bash
+ros2 topic type /icp_map_points
+```
+
+정상 결과:
+
+``` text
+sensor_msgs/msg/PointCloud2
+```
+
+Map point cloud는 정적인 reference data이므로 `Reliable + Transient Local` QoS를 사용합니다.
+
+Message 확인:
+
+``` bash
+ros2 topic echo /icp_map_points \
+--qos-reliability reliable \
+--qos-durability transient_local \
+--once
+```
+
+확인 항목:
+
+``` text
+header.frame_id: map
+width > 0
+```
+
+------------------------------------------------------------------------
+
+# 76. RViz2 OccupancyGrid / Reference PointCloud 검증
+
+RViz2 실행:
+
+``` bash
+rviz2
+```
+
+Map display 설정:
+
+``` text
+Topic: /map
+Reliability: Reliable
+Durability: Transient Local
+```
+
+PointCloud2 display 설정:
+
+``` text
+Topic: /icp_map_points
+Reliability: Reliable
+Durability: Transient Local
+Size: 0.03 ~ 0.05 m
+```
+
+Map Server만 실행 중인 경우 `map -> odom` TF가 존재하지 않으므로 시각화 검증이 필요할 때 임시 static TF를 사용할 수 있습니다.
+
+``` bash
+ros2 run tf2_ros static_transform_publisher \
+--x 0 \
+--y 0 \
+--z 0 \
+--yaw 0 \
+--pitch 0 \
+--roll 0 \
+--frame-id map \
+--child-frame-id odom
+```
+
+주의:
+
+``` text
+이 static transform은 RViz2 입력 데이터 검증용입니다.
+실제 ICP localization 결과로 사용하지 않습니다.
+```
+
+정상 결과:
+
+``` text
+OccupancyGrid의 벽 / 장애물 영역과 /icp_map_points가 동일한 위치에서 겹쳐 표시됨
+```
+
+검증 GIF:
+
+``` text
+docs/images/11_occupancygrid_reference_pointcloud_rviz.gif
+```
+
+------------------------------------------------------------------------
+
+# 77. Custom ICP 현재 진행 상태
+
+``` text
+[✓] icp_localization C++ package
+[✓] ROS2 /scan subscriber
+[✓] Invalid LaserScan range filtering
+[✓] LaserScan beam angle calculation
+[✓] Polar -> Cartesian conversion
+[✓] /icp_scan_points PointCloud2
+[✓] /scan / PointCloud2 RViz2 overlap validation
+[✓] ROS2 /map OccupancyGrid subscriber
+[✓] Reliable + Transient Local map QoS
+[✓] Occupied cell extraction
+[✓] Grid index -> row / column conversion
+[✓] Grid cell -> map coordinate conversion
+[✓] /icp_map_points PointCloud2
+[✓] OccupancyGrid / Reference PointCloud RViz2 validation
+
+[ ] Scan points -> map frame transformation
+[ ] Odometry initial pose integration
+[ ] Correspondence search
+[ ] Outlier rejection
+[ ] 2D rigid transform estimation
+[ ] ICP iteration / convergence
+[ ] ICP pose publication
+```
+
+------------------------------------------------------------------------
+
+# 78. 다음 단계
+
+다음 개발 단계는 **Current Scan Point를 Map Frame으로 변환하는 과정**입니다.
+
+현재 좌표계:
+
+``` text
+/icp_scan_points
+Frame: laser_link
+
+/icp_map_points
+Frame: map
+```
+
+두 point set을 ICP correspondence 단계에서 직접 비교하기 전에 동일한 좌표계로 변환해야 합니다.
+
+다음 목표:
+
+``` text
+Wheel Odometry / TF
+        ↓
+Initial Pose Estimate
+        ↓
+Current Scan Points
+laser_link -> map
+        ↓
+Map-frame Scan Points
+        ↓
+Reference Map Points와 Correspondence Search
+```
+
