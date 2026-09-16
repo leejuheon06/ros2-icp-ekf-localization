@@ -1294,3 +1294,548 @@ ROS2 /imu
 Localization Pipeline
 ```
 
+------------------------------------------------------------------------
+
+# 51. Gazebo IMU System 및 Sensor 확인
+
+`empty_world.sdf`에 Gazebo IMU system을 추가하고 `amr.urdf.xacro`의 `imu_link`에 IMU sensor를 연결한 후 빌드합니다.
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+colcon build \
+  --symlink-install \
+  --packages-select robot_description robot_simulation
+
+source install/setup.bash
+```
+
+Simulation 실행:
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py
+```
+
+Gazebo IMU topic 확인:
+
+``` bash
+ign topic -l | grep imu
+```
+
+``` bash
+ign topic -e -t /imu
+```
+
+확인 대상:
+
+``` text
+orientation
+angular_velocity
+linear_acceleration
+```
+
+------------------------------------------------------------------------
+
+# 52. ROS2 /imu Bridge 확인
+
+`bridge.yaml`에 Gazebo `/imu` → ROS2 `/imu` bridge를 추가한 후 확인합니다.
+
+``` bash
+ros2 topic list | grep imu
+```
+
+``` bash
+ros2 topic type /imu
+```
+
+정상 message type:
+
+``` text
+sensor_msgs/msg/Imu
+```
+
+IMU data 확인:
+
+``` bash
+ros2 topic echo /imu --once
+```
+
+Publish frequency 확인:
+
+``` bash
+ros2 topic hz /imu
+```
+
+현재 설정의 목표 update rate는 약 `50 Hz`입니다.
+
+------------------------------------------------------------------------
+
+# 53. IMU Frame 및 Motion Validation
+
+IMU message frame 확인:
+
+``` bash
+ros2 topic echo /imu --once | head -15
+```
+
+정상 frame:
+
+``` text
+imu_link
+```
+
+TF 확인:
+
+``` bash
+ros2 run tf2_ros tf2_echo base_link imu_link
+```
+
+회전 명령:
+
+``` bash
+ros2 topic pub \
+/cmd_vel \
+geometry_msgs/msg/Twist \
+"{linear: {x: 0.0}, angular: {z: 0.5}}" \
+-r 10
+```
+
+회전 중 `/imu`의 `angular_velocity.z` 값이 변화하는지 확인합니다.
+
+초기에는 Gazebo scoped sensor frame이 `/imu`의 `frame_id`로 사용되었으며, ROS2 TF tree의 `imu_link`와 일치하도록 sensor frame을 수정했습니다.
+
+------------------------------------------------------------------------
+
+# 54. Localization Benchmark World 생성 및 검증
+
+평가용 world:
+
+``` text
+src/robot_simulation/worlds/localization_world.sdf
+```
+
+XML 문법 확인:
+
+``` bash
+xmllint --noout \
+~/ros2_icp_ekf_localization/src/robot_simulation/worlds/localization_world.sdf
+```
+
+정상일 경우 아무 출력도 없습니다.
+
+World 단독 실행:
+
+``` bash
+ign gazebo \
+~/ros2_icp_ekf_localization/src/robot_simulation/worlds/localization_world.sdf
+```
+
+확인할 내용:
+
+``` text
+[✓] Outer walls
+[✓] Different-sized landmarks
+[✓] Rotated obstacle
+[✓] Central rectangular structure
+[✓] L-shaped feature
+[✓] Asymmetric geometry
+```
+
+------------------------------------------------------------------------
+
+# 55. World 및 Initial Pose Launch Argument 확인
+
+Launch argument 확인:
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py --show-args
+```
+
+확인 대상:
+
+``` text
+world
+x
+y
+z
+yaw
+```
+
+기존 sensor test world 실행:
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py
+```
+
+Benchmark world 실행:
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py \
+world:=localization_world.sdf \
+x:=0.0 \
+y:=-3.8 \
+yaw:=1.5708
+```
+
+이 설정을 향후 localization 평가의 고정 초기 조건으로 사용합니다.
+
+------------------------------------------------------------------------
+
+# 56. Odometry TF 확인
+
+ROS2 `/odom` message의 frame 설정을 확인합니다.
+
+``` bash
+ros2 topic echo /odom --once | head -20
+```
+
+목표:
+
+``` text
+header.frame_id: odom
+child_frame_id: base_footprint
+```
+
+TF 확인:
+
+``` bash
+ros2 run tf2_ros tf2_echo odom base_footprint
+```
+
+로봇을 움직였을 때 Translation / Rotation 값이 변화하는지 확인합니다.
+
+현재 TF chain:
+
+``` text
+odom
+  ↓
+base_footprint
+  ↓
+base_link
+  ↓
+laser_link
+```
+
+------------------------------------------------------------------------
+
+# 57. SLAM Toolbox 설치 및 Configuration
+
+설치 여부 확인:
+
+``` bash
+ros2 pkg list | grep slam_toolbox
+```
+
+설치되어 있지 않다면:
+
+``` bash
+sudo apt update
+sudo apt install ros-humble-slam-toolbox
+```
+
+기본 설정 파일 복사:
+
+``` bash
+cp \
+/opt/ros/humble/share/slam_toolbox/config/mapper_params_online_async.yaml \
+~/ros2_icp_ekf_localization/src/robot_simulation/config/slam_toolbox.yaml
+```
+
+주요 설정:
+
+``` text
+odom_frame: odom
+map_frame: map
+base_frame: base_footprint
+scan_topic: /scan
+mode: mapping
+min_laser_range: 0.1
+max_laser_range: 10.0
+```
+
+------------------------------------------------------------------------
+
+# 58. SLAM Toolbox Mapping 실행
+
+먼저 benchmark simulation을 실행합니다.
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py \
+world:=localization_world.sdf \
+x:=0.0 \
+y:=-3.8 \
+yaw:=1.5708
+```
+
+새 터미널에서 SLAM Toolbox 실행:
+
+``` bash
+ros2 launch slam_toolbox online_async_launch.py \
+use_sim_time:=true \
+slam_params_file:=$HOME/ros2_icp_ekf_localization/src/robot_simulation/config/slam_toolbox.yaml
+```
+
+Map topic 확인:
+
+``` bash
+ros2 topic list | grep map
+```
+
+Map TF 확인:
+
+``` bash
+ros2 run tf2_ros tf2_echo map odom
+```
+
+------------------------------------------------------------------------
+
+# 59. RViz2 Mapping Visualization
+
+``` bash
+rviz2
+```
+
+RViz2 설정:
+
+``` text
+Fixed Frame: map
+Map Topic: /map
+LaserScan Topic: /scan
+```
+
+Mapping 중 전체 TF chain:
+
+``` text
+map
+  ↓
+odom
+  ↓
+base_footprint
+  ↓
+base_link
+  ↓
+laser_link
+```
+
+------------------------------------------------------------------------
+
+# 60. Teleoperation을 이용한 Mapping 주행
+
+Teleop package 실행:
+
+``` bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+```
+
+설치되어 있지 않다면:
+
+``` bash
+sudo apt install ros-humble-teleop-twist-keyboard
+```
+
+급격한 이동과 회전을 피하고 benchmark world의 벽과 landmark가 충분히 관측되도록 주행합니다.
+
+------------------------------------------------------------------------
+
+# 61. Occupancy Grid Map 저장
+
+Map 저장 디렉터리 생성:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+mkdir -p maps
+```
+
+SLAM Toolbox가 실행 중인 상태에서 map을 저장합니다.
+
+``` bash
+ros2 run nav2_map_server map_saver_cli \
+-f ~/ros2_icp_ekf_localization/maps/localization_map
+```
+
+생성 파일:
+
+``` text
+maps/
+├── localization_map.pgm
+└── localization_map.yaml
+```
+
+저장 결과 확인:
+
+``` bash
+ls -lh ~/ros2_icp_ekf_localization/maps/
+```
+
+``` bash
+cat ~/ros2_icp_ekf_localization/maps/localization_map.yaml
+```
+
+------------------------------------------------------------------------
+
+# 62. Saved Map Reload - Map Server 실행
+
+SLAM Toolbox를 종료한 후 저장된 map을 Map Server에서 다시 불러옵니다.
+
+``` bash
+ros2 run nav2_map_server map_server \
+--ros-args \
+-p yaml_filename:=$HOME/ros2_icp_ekf_localization/maps/localization_map.yaml \
+-p use_sim_time:=true
+```
+
+`map_server`는 Lifecycle Node이므로 별도의 configure / activate 과정이 필요합니다.
+
+------------------------------------------------------------------------
+
+# 63. Map Server Lifecycle Control
+
+현재 상태 확인:
+
+``` bash
+ros2 lifecycle get /map_server
+```
+
+Configure:
+
+``` bash
+ros2 lifecycle set /map_server configure
+```
+
+Activate:
+
+``` bash
+ros2 lifecycle set /map_server activate
+```
+
+최종 상태 확인:
+
+``` bash
+ros2 lifecycle get /map_server
+```
+
+정상 상태:
+
+``` text
+active [3]
+```
+
+------------------------------------------------------------------------
+
+# 64. /map QoS 확인 및 OccupancyGrid 수신
+
+Map Server에서 `/map` topic은 durable map data를 제공하므로 subscriber QoS를 명시하여 확인합니다.
+
+``` bash
+ros2 topic info /map --verbose
+```
+
+``` bash
+ros2 topic echo /map \
+--qos-reliability reliable \
+--qos-durability transient_local \
+--once
+```
+
+정상 message type:
+
+``` text
+nav_msgs/msg/OccupancyGrid
+```
+
+현재 생성된 map 정보:
+
+``` text
+Resolution: 0.05 m/cell
+Width: 199 cells
+Height: 198 cells
+```
+
+초기에는 `/map` topic이 존재했지만 기본 `ros2 topic echo`로 데이터가 출력되지 않았습니다. `Reliable + Transient Local` QoS를 명시한 후 저장된 OccupancyGrid를 정상적으로 수신했습니다.
+
+------------------------------------------------------------------------
+
+# 65. RViz2 Saved Map Reload Validation
+
+RViz2 실행:
+
+``` bash
+rviz2
+```
+
+Map display 설정:
+
+``` text
+Topic: /map
+Reliability Policy: Reliable
+Durability Policy: Transient Local
+```
+
+검증 결과:
+
+``` text
+Map Status: Ok
+```
+
+Map Server는 저장된 `/map`을 publish하지만 `map -> odom` TF를 생성하지 않습니다.
+
+따라서 SLAM Toolbox 또는 localization node가 실행되지 않은 상태에서는 RViz2의 Global Status에서 다음 메시지가 나타날 수 있습니다.
+
+``` text
+Fixed Frame [map] does not exist
+```
+
+이 상태에서도 Map display가 `Status: Ok`이고 저장된 Occupancy Grid가 정상적으로 표시된다면 saved map reload 자체는 정상입니다.
+
+RViz2에서 다음 GLSL message가 나타날 수 있습니다.
+
+``` text
+active samplers with a different type refer to the same texture image unit
+```
+
+Map이 정상적으로 렌더링된다면 현재 mapping / map reload 기능 검증에는 영향을 주지 않습니다.
+
+------------------------------------------------------------------------
+
+# 66. Mapping 단계 완료 상태
+
+``` text
+[✓] Gazebo IMU Simulation
+[✓] ROS2 /imu
+[✓] IMU frame alignment
+[✓] localization_world.sdf
+[✓] World launch argument
+[✓] Fixed initial pose argument
+[✓] odom -> base_footprint TF
+[✓] SLAM Toolbox Mapping
+[✓] map -> odom TF during mapping
+[✓] ROS2 /map OccupancyGrid
+[✓] localization_map.pgm
+[✓] localization_map.yaml
+[✓] Map Server reload
+[✓] Reliable + Transient Local QoS validation
+[✓] RViz2 saved map visualization
+```
+
+------------------------------------------------------------------------
+
+# 67. 다음 단계
+
+다음 개발 milestone은 **Custom ICP Localization**입니다.
+
+``` text
+Saved Occupancy Map
+        ↓
+Reference Point Cloud
+        +
+Current LiDAR /scan
+        ↓
+Correspondence Search
+        ↓
+Rigid Transform Estimation
+        ↓
+Iterative Optimization
+        ↓
+ICP Pose [x, y, yaw]
+```
+

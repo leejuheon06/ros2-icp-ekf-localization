@@ -135,10 +135,17 @@ ros2_icp_ekf_localization/
 │   │
 │   └── robot_simulation/
 │       ├── config/
+│       │   ├── bridge.yaml
+│       │   └── slam_toolbox.yaml
 │       ├── launch/
 │       │   └── simulation.launch.py
 │       └── worlds/
-│           └── empty_world.sdf
+│           ├── empty_world.sdf
+│           └── localization_world.sdf
+│
+├── maps/
+│   ├── localization_map.pgm
+│   └── localization_map.yaml
 │
 ├── README.md
 └── .gitignore
@@ -495,56 +502,184 @@ Final validation confirmed that static obstacles in the Gazebo world are detecte
 
 ## Phase 7 — IMU Simulation
 
-**Status: Planned**
+**Status: Completed**
 
-Add simulated IMU measurements.
+Integrated a simulated IMU sensor into the AMR model and bridged the Gazebo IMU output to ROS2.
 
-Target output:
+Configuration:
+
+- Sensor link: `imu_link`
+- ROS2 output: `/imu`
+- Message type: `sensor_msgs/msg/Imu`
+- Update rate: `50 Hz`
+- Sensor frame: `imu_link`
+
+Implemented:
+
+- Gazebo IMU system plugin
+- IMU sensor attached to `imu_link`
+- Gazebo `/imu` → ROS2 `/imu` bridge
+- IMU frame alignment with the ROS2 TF tree
+- Orientation, angular velocity, and linear acceleration validation
+- Robot rotation test using `angular_velocity.z`
+
+Data flow:
 
 ```text
-/imu
+Gazebo IMU
+      |
+      v
+Gazebo /imu
+      |
+      v
+ros_gz_bridge
+      |
+      v
+ROS2 /imu
+      |
+      v
+Localization Pipeline
 ```
 
-Measurements will include:
-
-- Angular velocity
-- Linear acceleration
-- Orientation where applicable
+During initial validation, the IMU message used a Gazebo-scoped sensor frame instead of `imu_link`. The sensor frame was aligned with the ROS2 TF tree so that `/imu` can be used consistently in the later EKF stage.
 
 ---
 
-## Phase 8 — Mapping
+## Phase 8 — Evaluation Environment and Mapping
 
-**Status: Planned**
+**Status: Completed**
 
-Create a warehouse-like simulation environment containing:
+Created a fixed benchmark environment for mapping and future localization evaluation.
 
-- Walls
-- Corridors
-- Static obstacles
-- Distinct geometric features
+The evaluation world is stored as:
+
+```text
+src/robot_simulation/worlds/localization_world.sdf
+```
+
+The environment intentionally contains asymmetric geometric features, including:
+
+- Outer walls
+- Different-sized box landmarks
+- A rotated rectangular obstacle
+- A central rectangular structure
+- An L-shaped wall feature
+
+The asymmetric layout reduces geometric ambiguity and provides distinct LiDAR features for scan matching and localization evaluation.
+
+### World and Initial Pose Selection
+
+`simulation.launch.py` was extended with launch arguments so that the simulation world and robot initial pose can be selected without modifying the launch file.
+
+Example:
+
+```bash
+ros2 launch robot_simulation simulation.launch.py \
+world:=localization_world.sdf \
+x:=0.0 \
+y:=-3.8 \
+yaw:=1.5708
+```
+
+This allows the benchmark environment and initial pose to remain fixed across future localization experiments.
+
+### Odometry TF Integration
+
+The Gazebo Differential Drive configuration was extended to publish the odometry TF relationship:
+
+```text
+odom
+  |
+  v
+base_footprint
+  |
+  v
+base_link
+```
+
+The Gazebo TF output is bridged to ROS2 `/tf`, allowing SLAM Toolbox and future localization nodes to use the same TF chain.
+
+### SLAM Toolbox Mapping
+
+SLAM Toolbox was configured using:
+
+```text
+scan_topic: /scan
+odom_frame: odom
+map_frame: map
+base_frame: base_footprint
+mode: mapping
+```
+
+The LiDAR range configuration was matched to the simulated sensor:
+
+```text
+Minimum range: 0.10 m
+Maximum range: 10.0 m
+```
 
 Mapping pipeline:
 
 ```text
-Gazebo World
+Gazebo localization_world
       |
       v
 2D LiDAR /scan
       |
-      v
-SLAM Toolbox
-      |
-      v
-Occupancy Grid
+      +------------------+
+      |                  |
+      v                  v
+LaserScan        odom -> base_footprint
+      |                  |
+      +--------+---------+
+               |
+               v
+         SLAM Toolbox
+               |
+         +-----+-----+
+         |           |
+         v           v
+       /map      map -> odom
 ```
 
-The resulting map will be stored as:
+A 2D Occupancy Grid was successfully generated in RViz2.
+
+Current generated map information:
+
+- Resolution: `0.05 m/cell`
+- Width: `199 cells`
+- Height: `198 cells`
+- ROS2 type: `nav_msgs/msg/OccupancyGrid`
+
+The generated map was saved as:
 
 ```text
 maps/
-├── warehouse_map.pgm
-└── warehouse_map.yaml
+├── localization_map.pgm
+└── localization_map.yaml
+```
+
+### Saved Map Reload Validation
+
+The saved map was reloaded using Nav2 Map Server and validated in RViz2.
+
+The `/map` topic uses a durable map-style QoS profile. During validation, explicitly matching the subscriber QoS was required:
+
+```text
+Reliability: Reliable
+Durability: Transient Local
+```
+
+The saved Occupancy Grid was successfully received and displayed in RViz2 with `Map -> Status: Ok`.
+
+When only Map Server is running, `map -> odom` is not published. Therefore, RViz2 may report that the `map` Fixed Frame does not exist in the TF tree even though the saved Occupancy Grid itself is loaded correctly. A localization node will provide the required map-relative transform in later stages.
+
+Recommended result images:
+
+```text
+docs/images/07_localization_world_gazebo.png
+docs/images/08_slam_toolbox_generated_map_rviz.png
+docs/images/09_saved_map_reload_rviz.png
 ```
 
 ---
@@ -624,34 +759,92 @@ The EKF will contain:
 
 ---
 
-## Phase 11 — Localization Evaluation
+## Phase 11 — Baseline Localization Integration
 
 **Status: Planned**
 
-Compare the estimated localization result against Gazebo ground truth.
+Prepare baseline localization methods for comparison under the same benchmark conditions.
 
-Metrics:
+Comparison methods:
+
+```text
+Wheel Odometry Only
+Custom ICP
+Custom ICP + EKF
+Nav2 AMCL
+SLAM Toolbox Localization
+```
+
+All methods will use the same benchmark world, initial pose, map, and evaluation trajectory where applicable.
+
+---
+
+## Phase 12 — Quantitative Localization Evaluation
+
+**Status: Planned**
+
+Compare each localization result against Gazebo ground truth.
+
+Planned metrics:
 
 - X position error
 - Y position error
 - Yaw error
 - Translation RMSE
-- ICP convergence rate
+- Maximum position error
 - Localization trajectory drift
+- ICP convergence rate
+- Processing time
+- Localization update frequency
 
 Comparison:
 
 ```text
-Ground Truth
-     |
-     +----------------------+
-                            |
-Wheel Odometry ------------|---- Error Analysis
-                            |
-ICP -----------------------|
-                            |
-ICP + EKF -----------------+
+                    Gazebo Ground Truth
+                           |
+          +----------------+----------------+
+          |                |                |
+          v                v                v
+      Odometry            ICP          ICP + EKF
+          |                |                |
+          +----------------+----------------+
+                           |
+                    Error Analysis
+                           |
+          +----------------+----------------+
+          |                                 |
+          v                                 v
+       AMCL                      SLAM Toolbox Localization
 ```
+
+The final evaluation will report quantitative targets, measured results, target achievement status, and comparison graphs.
+
+---
+
+## Phase 13 — Results and Documentation
+
+**Status: Planned**
+
+Planned final result artifacts:
+
+```text
+results/
+├── trajectory_comparison.png
+├── translation_error_time_series.png
+├── yaw_error_time_series.png
+├── localization_rmse_comparison.png
+├── processing_time_comparison.png
+└── localization_kpi_summary.png
+```
+
+The final README will summarize:
+
+- Quantitative target values
+- Actual measured performance
+- Target achievement status
+- Odometry / ICP / ICP+EKF / AMCL / SLAM Toolbox comparison
+- Localization error and processing-time graphs
+- Analysis of failure cases and limitations
 
 ---
 
@@ -660,28 +853,38 @@ ICP + EKF -----------------+
 The final system will demonstrate:
 
 ```text
-Gazebo AMR
-    |
-    +---- 2D LiDAR
-    |
-    +---- Wheel Odometry
-    |
-    +---- IMU
-           |
-           v
-    ICP Localization
-           |
-           v
+Gazebo Benchmark World
+          |
+          +---- 2D LiDAR
+          |
+          +---- Wheel Odometry
+          |
+          +---- IMU
+          |
+          v
+   Custom ICP Localization
+          |
+          v
       EKF Fusion
-           |
-           v
+          |
+          v
     Estimated Pose
-           |
-           v
- Ground Truth Evaluation
+          |
+          +-------------------------------+
+          |                               |
+          v                               v
+  Gazebo Ground Truth           Baseline Localization
+                                  - Nav2 AMCL
+                                  - SLAM Toolbox
+          |                               |
+          +---------------+---------------+
+                          |
+                          v
+                 Quantitative Evaluation
+                 RMSE / Error / Latency
 ```
 
-The project focuses on understanding and implementing the core algorithms behind AMR localization, including coordinate transforms, scan matching, state estimation, sensor fusion, and quantitative localization evaluation.
+The project focuses on understanding and implementing the core algorithms behind AMR localization, including coordinate transforms, scan matching, state estimation, sensor fusion, map-based localization, and quantitative comparison against established ROS2 localization baselines.
 
 ---
 
@@ -711,17 +914,28 @@ ros2 launch robot_description display.launch.py
 ros2 launch robot_simulation simulation.launch.py
 ```
 
+Run the benchmark localization world with a fixed initial pose:
+
+```bash
+ros2 launch robot_simulation simulation.launch.py \
+world:=localization_world.sdf \
+x:=0.0 \
+y:=-3.8 \
+yaw:=1.5708
+```
+
 ---
 
 ## Progress
 
 ```text
-[████████████████░░░░] AMR / Simulation
+[████████████████████] AMR / Simulation
+[████████████████████] Sensors / Mapping
 [░░░░░░░░░░░░░░░░░░░░] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
-[░░░░░░░░░░░░░░░░░░░░] Evaluation
+[██░░░░░░░░░░░░░░░░░░] Evaluation Infrastructure
 ```
 
 Current milestone:
 
-**AMR URDF/Xacro model, Gazebo simulation, Differential Drive, ROS2 ↔ Gazebo bridge, wheel joint-state integration, and 2D LiDAR simulation completed. Next: IMU simulation.**
+**AMR simulation, ROS2 ↔ Gazebo bridge, wheel joint-state integration, 2D LiDAR, IMU, benchmark localization world, odometry TF, SLAM Toolbox mapping, Occupancy Grid generation, and saved-map reload validation completed. Next: Custom ICP localization.**

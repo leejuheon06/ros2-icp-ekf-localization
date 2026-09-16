@@ -1,0 +1,827 @@
+<?xml version="1.0" ?>
+
+<sdf version="1.8">
+
+  <world name="localization_world">
+
+
+    <!-- ========================================================= -->
+    <!-- Physics                                                   -->
+    <!-- ========================================================= -->
+
+    <physics name="1ms" type="ignored">
+
+      <max_step_size>0.001</max_step_size>
+
+      <real_time_factor>1.0</real_time_factor>
+
+    </physics>
+
+
+    <!-- ========================================================= -->
+    <!-- Physics System                                            -->
+    <!-- ========================================================= -->
+
+    <plugin
+      filename="ignition-gazebo-physics-system"
+      name="ignition::gazebo::systems::Physics">
+    </plugin>
+
+
+    <!-- ========================================================= -->
+    <!-- User Commands                                             -->
+    <!-- ========================================================= -->
+
+    <plugin
+      filename="ignition-gazebo-user-commands-system"
+      name="ignition::gazebo::systems::UserCommands">
+    </plugin>
+
+
+    <!-- ========================================================= -->
+    <!-- Scene Broadcaster                                         -->
+    <!-- ========================================================= -->
+
+    <plugin
+      filename="ignition-gazebo-scene-broadcaster-system"
+      name="ignition::gazebo::systems::SceneBroadcaster">
+    </plugin>
+
+
+    <!-- ========================================================= -->
+    <!-- Sensor System                                             -->
+    <!-- Used by GPU LiDAR                                         -->
+    <!-- ========================================================= -->
+
+    <plugin
+      filename="libignition-gazebo-sensors-system.so"
+      name="ignition::gazebo::systems::Sensors">
+
+      <render_engine>ogre2</render_engine>
+
+    </plugin>
+
+
+    <!-- ========================================================= -->
+    <!-- IMU System                                                -->
+    <!-- ========================================================= -->
+
+    <plugin
+      filename="libignition-gazebo-imu-system.so"
+      name="ignition::gazebo::systems::Imu">
+    </plugin>
+
+
+    <!-- ========================================================= -->
+    <!-- Ground Plane                                              -->
+    <!-- ========================================================= -->
+
+    <model name="ground_plane">
+
+      <static>true</static>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <plane>
+
+              <normal>0 0 1</normal>
+
+              <size>100 100</size>
+
+            </plane>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <plane>
+
+              <normal>0 0 1</normal>
+
+              <size>100 100</size>
+
+            </plane>
+
+          </geometry>
+
+
+          <material>
+
+            <ambient>0.8 0.8 0.8 1</ambient>
+
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+
+          </material>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Outer Wall - North                                        -->
+    <!-- y = +5                                                    -->
+    <!-- ========================================================= -->
+
+    <model name="wall_north">
+
+      <static>true</static>
+
+      <pose>0 5 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>10 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>10 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Outer Wall - South                                        -->
+    <!-- y = -5                                                    -->
+    <!-- ========================================================= -->
+
+    <model name="wall_south">
+
+      <static>true</static>
+
+      <pose>0 -5 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>10 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>10 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Outer Wall - West                                         -->
+    <!-- x = -5                                                    -->
+    <!-- ========================================================= -->
+
+    <model name="wall_west">
+
+      <static>true</static>
+
+      <pose>-5 0 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 10 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 10 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Outer Wall - East                                         -->
+    <!-- x = +5                                                    -->
+    <!-- ========================================================= -->
+
+    <model name="wall_east">
+
+      <static>true</static>
+
+      <pose>5 0 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 10 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 10 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Box A                                                     -->
+    <!-- Upper-right landmark                                      -->
+    <!-- ========================================================= -->
+
+    <model name="box_a">
+
+      <static>true</static>
+
+      <pose>3.0 3.3 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>1.0 1.0 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>1.0 1.0 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Rotated Obstacle                                          -->
+    <!-- Non-axis-aligned feature for LiDAR / ICP                   -->
+    <!-- yaw = 0.4 rad                                             -->
+    <!-- ========================================================= -->
+
+    <model name="rotated_obstacle">
+
+      <static>true</static>
+
+      <pose>-2.7 2.2 0.5 0 0 0.4</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>1.8 0.6 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>1.8 0.6 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Central Rectangular Structure                             -->
+    <!-- North Wall                                                -->
+    <!-- ========================================================= -->
+
+    <model name="center_room_north">
+
+      <static>true</static>
+
+      <pose>-0.3 2.5 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>2.4 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>2.4 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Central Rectangular Structure                             -->
+    <!-- South Wall                                                -->
+    <!-- ========================================================= -->
+
+    <model name="center_room_south">
+
+      <static>true</static>
+
+      <pose>-0.3 1.1 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>2.4 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>2.4 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Central Rectangular Structure                             -->
+    <!-- West Wall                                                 -->
+    <!-- ========================================================= -->
+
+    <model name="center_room_west">
+
+      <static>true</static>
+
+      <pose>-1.4 1.8 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 1.6 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 1.6 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Central Rectangular Structure                             -->
+    <!-- East Wall                                                 -->
+    <!-- ========================================================= -->
+
+    <model name="center_room_east">
+
+      <static>true</static>
+
+      <pose>0.8 1.8 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 1.6 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 1.6 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Box B                                                     -->
+    <!-- Left-side landmark                                        -->
+    <!-- ========================================================= -->
+
+    <model name="box_b">
+
+      <static>true</static>
+
+      <pose>-3.2 -0.3 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.9 0.9 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.9 0.9 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Box C                                                     -->
+    <!-- Right-side vertical landmark                              -->
+    <!-- ========================================================= -->
+
+    <model name="box_c">
+
+      <static>true</static>
+
+      <pose>3.1 -0.4 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.8 1.8 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.8 1.8 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- L-shaped Feature                                          -->
+    <!-- Horizontal Wall                                           -->
+    <!-- ========================================================= -->
+
+    <model name="inner_wall_horizontal">
+
+      <static>true</static>
+
+      <pose>1.1 -2.1 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>2.8 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>2.8 0.2 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- L-shaped Feature                                          -->
+    <!-- Vertical Wall                                             -->
+    <!-- ========================================================= -->
+
+    <model name="inner_wall_vertical">
+
+      <static>true</static>
+
+      <pose>2.4 -2.9 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 1.8 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+
+            <box>
+
+              <size>0.2 1.8 1.0</size>
+
+            </box>
+
+          </geometry>
+
+        </visual>
+
+      </link>
+
+    </model>
+
+
+    <!-- ========================================================= -->
+    <!-- Directional Light                                         -->
+    <!-- ========================================================= -->
+
+    <light type="directional" name="sun">
+
+      <cast_shadows>true</cast_shadows>
+
+      <pose>0 0 10 0 0 0</pose>
+
+
+      <diffuse>
+
+        0.8 0.8 0.8 1
+
+      </diffuse>
+
+
+      <specular>
+
+        0.2 0.2 0.2 1
+
+      </specular>
+
+
+      <direction>
+
+        -0.5 0.1 -0.9
+
+      </direction>
+
+    </light>
+
+
+  </world>
+
+</sdf>

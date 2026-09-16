@@ -285,6 +285,18 @@
 
     </joint>
 
+    <gazebo reference="imu_link">
+        <sensor name="imu_sensor" type="imu">
+            <topic>imu</topic>
+            <gz_frame_id>imu_link</gz_frame_id>
+            <update_rate>50</update_rate>
+            <always_on>true</always_on>
+            <visualize>false</visualize>
+        </sensor>
+    </gazebo>
+
+
+
     <!-- ========================= -->
     <!-- FRONT CASTER -->
     <!-- ========================= -->
@@ -403,6 +415,14 @@
             <wheel_radius>0.08</wheel_radius>
 
             <topic>cmd_vel</topic>
+
+            <odom_topic>/model/icp_ekf_amr/odometry</odom_topic>
+
+            <frame_id>odom</frame_id>
+
+            <child_frame_id>base_footprint</child_frame_id>
+
+            <tf_topic>/model/icp_ekf_amr/tf</tf_topic>
 
             <odom_publish_frequency>50</odom_publish_frequency>
 
