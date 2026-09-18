@@ -223,3 +223,67 @@
 - Add correspondence filtering / outlier rejection
 - Implement 2D rigid transform estimation and ICP iteration
 
+## 2026-09-18
+
+### ICP Map Reference Persistence
+- Changed the map reference point vector from a `mapCallback()` local variable to the class member `map_points_`
+- Preserved the extracted OccupancyGrid reference points after `mapCallback()` returns
+- Verified that `scanCallback()` can access the saved reference points for later ICP matching
+
+### LaserScan TF Transformation
+- Added TF2 dependencies to the custom ICP package
+- Looked up the `laser_link -> odom` transform through the ROS2 TF tree
+- Extracted translation and yaw from the TF transform
+- Applied the 2D rotation / translation equation to each LiDAR point
+- Published odometry-frame scan points on `/icp_scan_points_odom`
+- Verified the transformed scan dynamically in RViz2 while the robot moves
+
+### Map-Frame Scan Preparation
+- Added a `Pose2D` structure for the current `map -> odom` estimate
+- Initialized the benchmark transform estimate to `x=0.0`, `y=0.0`, `yaw=0.0` after validating the identity alignment condition
+- Transformed `odom_points` into `map_scan_points`
+- Published the current map-frame LiDAR observation on `/icp_scan_points_map`
+- Confirmed that `/icp_scan_points_map` is an ICP Source point cloud, not a newly generated map
+
+### Map-Related QoS Cleanup
+- Removed duplicated map QoS definitions
+- Added one shared `map_related_qos` profile
+- Applied `KeepLast(1) + Reliable + Transient Local` to the `/map` subscriber, `/icp_map_points`, and `/icp_scan_points_map`
+- Kept the intermediate `/icp_scan_points` and `/icp_scan_points_odom` streams on their existing continuous-stream QoS settings
+
+### ICP Source / Target RViz2 Validation
+- Visualized `/icp_map_points` as the saved-map Target point cloud
+- Visualized `/icp_scan_points_map` as the current LiDAR Source point cloud
+- Used different FlatColor settings in RViz2 to make the two point sets easy to compare
+- Verified that the current scan follows the same wall geometry as the saved map
+- Observed a small residual map/scan offset during rotation, which is acceptable at the current pre-ICP stage
+
+### Current Limitation / Observation
+- The current TF lookup uses `tf2::TimePointZero`, which returns the latest available transform
+- During robot rotation, LiDAR measurement time and TF time can differ slightly and produce a visible residual offset
+- Timestamp-aligned TF lookup is planned before quantitative localization evaluation
+- The temporary identity `map -> odom` static TF remains a visualization-only aid and will be removed when custom localization publishes the real transform
+
+### ICP Input Validation Artifacts
+- Added `docs/images/12_laserscan_odom_transform_rviz.gif`
+- Added `docs/images/13_icp_map_scan_alignment_rviz.png`
+
+### Current Milestone
+- ICP C++ Package: In Progress
+- LaserScan -> 2D PointCloud: Completed
+- OccupancyGrid -> Reference PointCloud: Completed
+- Persistent `map_points_`: Completed
+- `laser_link -> odom` Scan Transformation: Completed
+- `odom -> map` Scan Transformation: Completed
+- `/icp_scan_points_map`: Completed
+- Map-Related QoS Cleanup: Completed
+- Map Target / Scan Source RViz2 Validation: Completed
+- Nearest-Neighbor Correspondence Search: Next
+
+### Next Step
+- Implement brute-force nearest-neighbor correspondence search
+- Compute squared Euclidean distance between each Source scan point and Target map point
+- Validate correspondence count and distance distribution
+- Add maximum correspondence-distance filtering / outlier rejection
+- Continue to 2D rigid-transform estimation after correspondence validation
+

@@ -2258,3 +2258,410 @@ Map-frame Scan Points
 Reference Map Points와 Correspondence Search
 ```
 
+------------------------------------------------------------------------
+
+# 79. TF Dependency 추가
+
+`laser_link -> odom` 좌표 변환을 위해 `tf2`, `tf2_ros`, `tf2_geometry_msgs` dependency를 사용합니다.
+
+`package.xml`:
+
+``` xml
+<depend>tf2</depend>
+<depend>tf2_ros</depend>
+<depend>tf2_geometry_msgs</depend>
+```
+
+`CMakeLists.txt`:
+
+``` cmake
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+```
+
+`ament_target_dependencies()`에도 동일 dependency를 추가합니다.
+
+빌드:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+colcon build \
+  --symlink-install \
+  --packages-select icp_localization
+
+source install/setup.bash
+```
+
+------------------------------------------------------------------------
+
+# 80. LaserScan Point -> Odom Frame 변환 확인
+
+현재 `/scan` point는 `laser_link` 기준이므로 ROS2 TF를 사용해 `odom` 좌표계로 변환합니다.
+
+변환 흐름:
+
+``` text
+/scan
+  ↓
+2D Point [laser_link]
+  ↓
+TF lookup: odom <- laser_link
+  ↓
+Rotation + Translation
+  ↓
+odom_points
+  ↓
+/icp_scan_points_odom
+```
+
+Topic 확인:
+
+``` bash
+ros2 topic type /icp_scan_points_odom
+ros2 topic hz /icp_scan_points_odom
+ros2 topic echo /icp_scan_points_odom --once | head -20
+```
+
+정상 확인 항목:
+
+``` text
+Message type: sensor_msgs/msg/PointCloud2
+Frame: odom
+Publish rate: approximately 10 Hz
+```
+
+RViz2에서 로봇을 이동 / 회전시키며 scan point가 odom 좌표계에서 자연스럽게 이동하는지 확인합니다.
+
+검증 GIF:
+
+``` text
+docs/images/12_laserscan_odom_transform_rviz.gif
+```
+
+------------------------------------------------------------------------
+
+# 81. Reference Map Point를 Class Member로 유지
+
+기존 `mapCallback()` 내부의 지역 변수는 callback 종료 시 사라지므로, 이후 `scanCallback()`에서 ICP Target으로 사용할 수 있도록 class member로 변경했습니다.
+
+``` cpp
+std::vector<Point2D> map_points_;
+```
+
+`mapCallback()` 시작 시 기존 데이터를 제거하고 새 map을 저장합니다.
+
+``` cpp
+map_points_.clear();
+map_points_.reserve(msg->data.size());
+```
+
+`scanCallback()`에서도 저장된 reference point 수를 확인할 수 있습니다.
+
+정상 로그 예:
+
+``` text
+Reference map points available in scanCallback: XXXX
+```
+
+이 단계가 완료되면 `/map`으로 생성한 reference points를 `/scan` callback의 ICP 계산에서 재사용할 수 있습니다.
+
+------------------------------------------------------------------------
+
+# 82. Odom Point -> Map Frame 변환
+
+ICP는 Source와 Target이 동일한 좌표계에 있어야 하므로 `odom_points`를 `map` 좌표계로 변환합니다.
+
+현재 초기 추정값:
+
+``` text
+T_map_odom
+x   = 0.0
+y   = 0.0
+yaw = 0.0
+```
+
+2D 변환식:
+
+``` text
+x_map = cos(yaw) * x_odom - sin(yaw) * y_odom + tx
+y_map = sin(yaw) * x_odom + cos(yaw) * y_odom + ty
+```
+
+결과는 다음 topic으로 publish합니다.
+
+``` text
+Topic: /icp_scan_points_map
+Frame: map
+```
+
+주의:
+
+``` text
+/icp_scan_points_map은 LiDAR scan으로 새 map을 만드는 topic이 아닙니다.
+현재 LiDAR observation을 map 좌표계로 표현한 ICP Source point cloud입니다.
+```
+
+------------------------------------------------------------------------
+
+# 83. Map 관련 QoS 통일
+
+현재 개발 / RViz2 검증 단계에서는 map 관련 통신에 동일한 QoS profile을 사용합니다.
+
+``` text
+History: Keep Last
+Depth: 1
+Reliability: Reliable
+Durability: Transient Local
+```
+
+공통 QoS 적용 대상:
+
+``` text
+/map subscriber
+/icp_map_points publisher
+/icp_scan_points_map publisher
+```
+
+Topic QoS 확인:
+
+``` bash
+ros2 topic info /map --verbose
+ros2 topic info /icp_map_points --verbose
+ros2 topic info /icp_scan_points_map --verbose
+```
+
+`/icp_scan_points`와 `/icp_scan_points_odom`은 연속적인 중간 debug stream이므로 기존 depth `10` 설정을 유지합니다.
+
+------------------------------------------------------------------------
+
+# 84. Map-Frame ICP Input 검증 실행 순서
+
+Benchmark simulation 실행:
+
+``` bash
+ros2 launch robot_simulation simulation.launch.py \
+world:=localization_world.sdf \
+x:=0.0 \
+y:=-3.8 \
+yaw:=1.5708
+```
+
+Map Server 실행:
+
+``` bash
+ros2 run nav2_map_server map_server \
+--ros-args \
+-p yaml_filename:=$HOME/ros2_icp_ekf_localization/maps/localization_map.yaml \
+-p use_sim_time:=true
+```
+
+Lifecycle 활성화:
+
+``` bash
+ros2 lifecycle set /map_server configure
+ros2 lifecycle set /map_server activate
+```
+
+현재 검증 단계의 임시 `map -> odom` identity TF:
+
+``` bash
+ros2 run tf2_ros static_transform_publisher \
+--x 0 --y 0 --z 0 \
+--yaw 0 --pitch 0 --roll 0 \
+--frame-id map \
+--child-frame-id odom
+```
+
+ICP node 실행:
+
+``` bash
+ros2 run icp_localization icp_localization_node
+```
+
+주의:
+
+``` text
+임시 static map -> odom은 RViz2 검증용입니다.
+향후 custom ICP node가 실제 map -> odom을 publish할 때는 반드시 종료합니다.
+```
+
+------------------------------------------------------------------------
+
+# 85. /icp_map_points vs /icp_scan_points_map RViz2 검증
+
+RViz2 실행:
+
+``` bash
+rviz2
+```
+
+Global Options:
+
+``` text
+Fixed Frame: map
+```
+
+Reference Map PointCloud2:
+
+``` text
+Topic: /icp_map_points
+Reliability: Reliable
+Durability: Transient Local
+Color Transformer: FlatColor
+Color: Green
+```
+
+Current Scan PointCloud2:
+
+``` text
+Topic: /icp_scan_points_map
+Reliability: Reliable
+Durability: Transient Local
+Color Transformer: FlatColor
+Color: Red
+```
+
+정상 결과:
+
+``` text
+Green: saved OccupancyGrid reference points (Target)
+Red: current LiDAR points expressed in map frame (Source)
+
+현재 LiDAR가 관측하는 벽 / 장애물 구간에서 두 point set이 같은 geometry를 따라 표시됨
+```
+
+완벽한 point-to-point 일치는 필요하지 않습니다. Map resolution, LiDAR measurement, odometry error 및 아직 적용되지 않은 ICP correction 때문에 작은 residual offset이 존재할 수 있습니다.
+
+검증 이미지:
+
+``` text
+docs/images/13_icp_map_scan_alignment_rviz.png
+```
+
+------------------------------------------------------------------------
+
+# 86. Rotation Test
+
+제자리 회전:
+
+``` bash
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
+"{linear: {x: 0.0}, angular: {z: 0.2}}" -r 10
+```
+
+회전 중 `/icp_scan_points_map`이 저장된 map geometry를 따라가는지 확인합니다.
+
+현재 TF lookup은 다음과 같이 최신 transform을 사용합니다.
+
+``` text
+tf2::TimePointZero
+```
+
+따라서 회전 중 LiDAR measurement time과 TF time 사이의 차이로 소폭의 흔들림 / offset이 보일 수 있습니다.
+
+정지 상태에서 point cloud가 안정적으로 유지되고, 회전 중에도 동일한 wall geometry 주변을 따라간다면 현재 ICP input preparation 단계의 좌표변환 검증은 완료로 판단합니다.
+
+향후 정량 평가 전에는 LaserScan timestamp에 맞춘 TF lookup으로 개선할 예정입니다.
+
+------------------------------------------------------------------------
+
+# 87. Custom ICP 현재 진행 상태
+
+``` text
+[✓] icp_localization C++ package
+[✓] LaserScan -> 2D Point conversion
+[✓] /icp_scan_points
+[✓] OccupancyGrid -> reference points
+[✓] Persistent map_points_ member
+[✓] /icp_map_points
+[✓] laser_link -> odom point transformation
+[✓] /icp_scan_points_odom
+[✓] Pose2D initial map -> odom estimate
+[✓] odom -> map point transformation
+[✓] /icp_scan_points_map
+[✓] Shared map-related QoS
+[✓] Map Target / Scan Source RViz2 alignment validation
+
+[ ] Nearest-neighbor correspondence search
+[ ] Correspondence distance filtering / outlier rejection
+[ ] 2D rigid transform estimation
+[ ] ICP transform update
+[ ] ICP iteration / convergence
+[ ] ICP pose / map -> odom publication
+[ ] Scan timestamp-aligned TF refinement
+```
+
+------------------------------------------------------------------------
+
+# 88. 현재 단계 Git Commit
+
+먼저 검증 이미지를 다음 이름으로 저장합니다.
+
+``` text
+docs/images/13_icp_map_scan_alignment_rviz.png
+```
+
+변경 내용 확인:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+git diff
+```
+
+이번 단계의 파일을 명시적으로 staging 합니다.
+
+``` bash
+git add src/icp_localization/src/icp_localization_node.cpp
+git add src/icp_localization/CMakeLists.txt
+git add src/icp_localization/package.xml
+git add docs/images/12_laserscan_odom_transform_rviz.gif
+git add docs/images/13_icp_map_scan_alignment_rviz.png
+git add README.md
+git add docs/COMMANDS.md
+git add docs/TIMELINE.md
+```
+
+Commit 전 확인:
+
+``` bash
+git status
+git diff --cached
+```
+
+권장 commit:
+
+``` bash
+git commit -m "feat: prepare map-frame point clouds for ICP matching"
+```
+
+Push:
+
+``` bash
+git push origin main
+```
+
+------------------------------------------------------------------------
+
+# 89. 다음 단계
+
+다음 개발 단계는 **Nearest-Neighbor Correspondence Search**입니다.
+
+``` text
+map_scan_points  [Source]
+       ↓
+각 Source Point에 대해
+map_points_      [Target] 검색
+       ↓
+Nearest Map Point
+       ↓
+Correspondence Pair
+       ↓
+Distance / Outlier Filtering
+```
+
+초기 구현은 알고리즘 이해를 위해 brute-force nearest-neighbor 방식으로 진행합니다.
+

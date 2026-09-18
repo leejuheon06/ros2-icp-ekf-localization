@@ -727,38 +727,41 @@ When only Map Server is running, `map -> odom` is not published. Therefore, RViz
 
 **Status: In Progress**
 
-The custom 2D ICP localization package is being implemented in C++ using ROS2 sensor and map data directly.
+The custom 2D ICP localization package is being implemented in C++ using ROS2 sensor, TF, odometry-frame, and saved-map data directly.
 
 Current processing pipeline:
 
 ```text
-ROS2 /scan
-   |
-   v
-LaserScan Range Filtering
-   |
-   v
-Polar -> Cartesian Conversion
-   |
-   v
-Current Scan Point Cloud
-   |
-   +------------------------------+
-                                  |
-ROS2 /map                         |
-   |                              |
-   v                              |
-Occupied Cell Extraction          |
-   |                              |
-   v                              |
-Grid Index -> Map Coordinate      |
-   |                              |
-   v                              |
-Reference Map Point Cloud --------+
-                                  |
-                                  v
-                         ICP Registration
-                           (Next Step)
+Saved Map /map
+      |
+      v
+OccupancyGrid -> Occupied Cells
+      |
+      v
+map_points_  [Target / map frame]
+      |
+      +--------------------------------------+
+                                             |
+Current LiDAR /scan                          |
+      |                                      |
+      v                                      |
+LaserScan -> 2D Points [laser_link]          |
+      |                                      |
+      v                                      |
+TF: laser_link -> odom                       |
+      |                                      |
+      v                                      |
+odom_points                                  |
+      |                                      |
+      v                                      |
+Initial T_map_odom                           |
+      |                                      |
+      v                                      |
+map_scan_points [Source / map frame] --------+
+                                             |
+                                             v
+                                  Correspondence Search
+                                       (Next Step)
 ```
 
 ### ICP ROS2 Package
@@ -778,6 +781,9 @@ Current dependencies:
 - `rclcpp`
 - `sensor_msgs`
 - `nav_msgs`
+- `tf2`
+- `tf2_ros`
+- `tf2_geometry_msgs`
 
 ### LaserScan to 2D Point Cloud
 
@@ -798,7 +804,7 @@ x = range * cos(angle)
 y = range * sin(angle)
 ```
 
-The original `/scan` visualization and the converted `/icp_scan_points` were displayed simultaneously in RViz2. The point sets overlapped correctly, validating the scan conversion used as the current ICP input.
+The original `/scan` visualization and the converted `/icp_scan_points` were displayed simultaneously in RViz2. The point sets overlapped correctly, validating the scan conversion used as the first ICP input-preparation step.
 
 ![LaserScan PointCloud Overlap](docs/images/10_laserscan_pointcloud_overlap_rviz.gif)
 
@@ -806,12 +812,12 @@ The original `/scan` visualization and the converted `/icp_scan_points` were dis
 
 Implemented:
 
-- ROS2 `/map` subscription using `Reliable + Transient Local` QoS
+- ROS2 `/map` subscription
 - Occupied-cell extraction from `nav_msgs/msg/OccupancyGrid`
 - 1D map index conversion to row and column
 - Grid-cell center conversion to map-frame metric coordinates
+- Persistent `map_points_` class member so the reference points remain available after `mapCallback()` returns
 - ROS2 `sensor_msgs/msg/PointCloud2` publication on `/icp_map_points`
-- `Reliable + Transient Local` QoS for the static reference point cloud
 
 Grid conversion:
 
@@ -827,27 +833,134 @@ Occupied cells currently use an occupancy threshold of `65` or greater. The gene
 
 ![OccupancyGrid Reference PointCloud](docs/images/11_occupancygrid_reference_pointcloud_rviz.gif)
 
-### Current ICP Input Status
+### LaserScan to Odom Frame Transformation
+
+The current LiDAR points are transformed from `laser_link` into the odometry coordinate frame using the ROS2 TF tree.
 
 ```text
-Current Scan Points
-Topic: /icp_scan_points
-Frame: laser_link
+laser_link points
+      |
+      v
+TF lookup: odom <- laser_link
+      |
+      v
+2D rotation + translation
+      |
+      v
+odom_points
+```
 
-Reference Map Points
-Topic: /icp_map_points
+The transform translation and yaw are applied manually using:
+
+```text
+x' = cos(yaw) * x - sin(yaw) * y + tx
+y' = sin(yaw) * x + cos(yaw) * y + ty
+```
+
+The transformed points are published on:
+
+```text
+Topic: /icp_scan_points_odom
+Frame: odom
+```
+
+Dynamic RViz2 validation confirmed that the transformed scan follows the robot motion in the odometry frame.
+
+![LaserScan Odom Transformation](docs/images/12_laserscan_odom_transform_rviz.gif)
+
+### Odom to Map Frame Transformation
+
+For ICP comparison, both the current scan and saved-map reference points must use the same coordinate frame.
+
+A `Pose2D` structure stores the current `map -> odom` estimate:
+
+```text
+[x, y, yaw]
+```
+
+The current benchmark begins with an identity initial estimate:
+
+```text
+x   = 0.0
+y   = 0.0
+yaw = 0.0
+```
+
+The odometry-frame scan points are transformed using this estimate and published as:
+
+```text
+Topic: /icp_scan_points_map
 Frame: map
 ```
 
-The two ICP inputs are now available, but they cannot yet be compared directly because they are expressed in different coordinate frames.
+This topic does **not** create a new map. It represents the current LiDAR observation expressed in the saved map coordinate frame.
+
+### Map-Frame ICP Input Validation
+
+The two ICP point sets are now directly comparable:
+
+```text
+Target
+/icp_map_points
+Frame: map
+Source: saved OccupancyGrid
+
+Source
+/icp_scan_points_map
+Frame: map
+Source: current LiDAR observation
+```
+
+The map-related ROS2 interfaces currently share one QoS profile for development and RViz2 validation:
+
+```text
+History: Keep Last
+Depth: 1
+Reliability: Reliable
+Durability: Transient Local
+```
+
+The shared profile is used by:
+
+- `/map` subscriber
+- `/icp_map_points` publisher
+- `/icp_scan_points_map` publisher
+
+A temporary identity `map -> odom` static transform is used only to keep the RViz2 TF tree connected during this validation stage. It will be removed when the custom localization node publishes the real transform.
+
+RViz2 validation shows the current LiDAR scan points following the same wall geometry as the saved-map reference points, with a small residual offset still visible before ICP correction.
+
+![ICP Map-Frame Input Alignment](docs/images/13_icp_map_scan_alignment_rviz.png)
+
+### Current Limitation
+
+The current TF lookup uses the latest available transform (`tf2::TimePointZero`). During robot rotation, a small map/scan offset can therefore be visible because the LiDAR measurement timestamp and the TF timestamp are not yet explicitly synchronized.
+
+Timestamp-aligned TF lookup will be refined before quantitative localization evaluation.
+
+### Current ICP Input Status
+
+```text
+Reference / Target
+map_points_
+Topic: /icp_map_points
+Frame: map
+
+Current Scan / Source
+map_scan_points
+Topic: /icp_scan_points_map
+Frame: map
+```
+
+The input-preparation stage is complete enough to begin the first ICP algorithm step.
 
 Next implementation steps:
 
-- Transform current scan points into the map coordinate frame using an initial pose estimate
-- Use odometry as the initial motion estimate
 - Implement nearest-neighbor correspondence search
+- Measure source-to-target correspondence distances
 - Reject invalid / distant correspondences
 - Estimate the 2D rigid transformation
+- Update the `map -> odom` estimate
 - Iterate until convergence
 - Publish and evaluate the ICP pose
 
@@ -1058,11 +1171,11 @@ yaw:=1.5708
 ```text
 [████████████████████] AMR / Simulation
 [████████████████████] Sensors / Mapping
-[██████░░░░░░░░░░░░░░░░] ICP Localization
+[██████░░░░░░░░░░░░░░] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
 [██░░░░░░░░░░░░░░░░░░] Evaluation Infrastructure
 ```
 
 Current milestone:
 
-**AMR simulation, sensor integration, benchmark mapping, and saved-map validation are complete. Custom ICP input preparation is in progress: LaserScan-to-PointCloud2 and OccupancyGrid-to-reference-point-cloud conversion have been validated in RViz2. Next: transform scan points into the map frame and begin correspondence search.**
+**AMR simulation, sensor integration, benchmark mapping, and saved-map validation are complete. Custom ICP input preparation now includes persistent map reference points, `laser_link -> odom -> map` scan transformation, unified map-related QoS, and RViz2 validation of `/icp_map_points` against `/icp_scan_points_map`. Next: implement nearest-neighbor correspondence search.**
