@@ -575,85 +575,7 @@ source install/setup.bash
 
 ------------------------------------------------------------------------
 
-# 25. Git 상태 확인
-
-프로젝트 루트로 이동합니다.
-
-``` bash
-cd ~/ros2_icp_ekf_localization
-```
-
-변경된 파일을 확인합니다.
-
-``` bash
-git status
-```
-
-변경 내용을 확인합니다.
-
-``` bash
-git diff
-```
-
-------------------------------------------------------------------------
-
-# 26. Git Staging
-
-이번 단계에서 변경한 파일을 명시적으로 추가하는 방식을 권장합니다.
-
-예:
-
-``` bash
-git add src/robot_description
-git add src/robot_simulation
-git add README.md
-git add docs/
-```
-
-Staging된 내용을 확인합니다.
-
-``` bash
-git status
-```
-
-실제로 commit될 변경사항을 확인합니다.
-
-``` bash
-git diff --cached
-```
-
-------------------------------------------------------------------------
-
-# 27. 현재 단계 Git Commit
-
-현재까지의 AMR URDF + Gazebo Simulation 작업을 하나의 milestone으로
-commit한다면:
-
-``` bash
-git commit -m "feat: add AMR URDF and Gazebo simulation"
-```
-
-commit history 확인:
-
-``` bash
-git log --oneline
-```
-
-GitHub로 push:
-
-``` bash
-git push
-```
-
-최초 push에서 upstream이 설정되지 않았다면:
-
-``` bash
-git push -u origin main
-```
-
-------------------------------------------------------------------------
-
-# 28. 현재 프로젝트 진행 상태
+# 25. 현재 프로젝트 진행 상태
 
 ``` text
 [✓] Ubuntu 22.04 / ROS2 Humble
@@ -690,7 +612,7 @@ git push -u origin main
 
 ------------------------------------------------------------------------
 
-# 29. 다음 단계
+# 26. 다음 단계
 
 Differential Drive Gazebo 직접 구동 검증까지 완료했습니다.
 
@@ -719,12 +641,11 @@ AMR Motion
 7.  RViz에서 TF/Odometry 확인
 8.  실행 결과 이미지 및 GIF 저장
 9.  README/TIMELINE 업데이트
-10. Git commit 및 push
 
 
 ------------------------------------------------------------------------
 
-# 30. Differential Drive Gazebo Topic 확인
+# 27. Differential Drive Gazebo Topic 확인
 
 Gazebo simulation을 실행합니다.
 
@@ -751,7 +672,7 @@ ign topic -l | grep -E "cmd_vel|odom|odometry|icp_ekf_amr"
 
 ------------------------------------------------------------------------
 
-# 31. Differential Drive 직접 구동 테스트
+# 28. Differential Drive 직접 구동 테스트
 
 전진:
 
@@ -788,7 +709,7 @@ angular.z < 0 → Clockwise
 
 ------------------------------------------------------------------------
 
-# 32. Gazebo Odometry 확인
+# 29. Gazebo Odometry 확인
 
 ``` bash
 ign topic -e -t /model/icp_ekf_amr/odometry
@@ -798,7 +719,7 @@ ign topic -e -t /model/icp_ekf_amr/odometry
 
 ------------------------------------------------------------------------
 
-# 33. Wheel Joint Axis 방향 수정
+# 30. Wheel Joint Axis 방향 수정
 
 초기 테스트에서 다음 문제가 발생했습니다.
 
@@ -849,7 +770,7 @@ ros2 launch robot_simulation simulation.launch.py
 
 ------------------------------------------------------------------------
 
-# 34. 다음 단계
+# 31. 다음 단계
 
 다음 개발 milestone은 **ROS2 ↔ Gazebo Bridge**입니다.
 
@@ -873,49 +794,7 @@ ROS2 /odom
 
 ------------------------------------------------------------------------
 
-# 35. Git Commit
-
-``` bash
-cd ~/ros2_icp_ekf_localization
-
-git status
-
-git diff
-```
-
-변경 파일을 staging 합니다.
-
-``` bash
-git add src/robot_description/urdf/amr.urdf.xacro
-git add README.md
-git add COMMANDS.md
-git add TIMELINE.md
-```
-
-Staging 결과를 확인합니다.
-
-``` bash
-git status
-
-git diff --cached
-```
-
-Commit:
-
-``` bash
-git commit -m "feat: add differential drive and validate robot motion"
-```
-
-Push:
-
-``` bash
-git push origin main
-```
-
-
-------------------------------------------------------------------------
-
-# 36. ROS2 ↔ Gazebo Bridge 자동 실행
+# 32. ROS2 ↔ Gazebo Bridge 자동 실행
 
 `simulation.launch.py`에 `ros_gz_bridge`를 추가하여 Gazebo simulation과 함께
 bridge가 자동으로 실행되도록 구성했습니다.
@@ -942,7 +821,7 @@ Launch 로그에서 `parameter_bridge` process가 자동으로 실행되는지 �
 
 ------------------------------------------------------------------------
 
-# 37. ROS2 Topic 확인
+# 33. ROS2 Topic 확인
 
 새 터미널에서:
 
@@ -975,7 +854,7 @@ ros2 topic info /odom
 
 ------------------------------------------------------------------------
 
-# 38. ROS2 /cmd_vel로 AMR 구동 확인
+# 34. ROS2 /cmd_vel로 AMR 구동 확인
 
 이 단계부터는 `ign topic`이 아니라 ROS2 topic을 사용합니다.
 
@@ -1008,7 +887,7 @@ angular.z < 0 → Clockwise
 
 ------------------------------------------------------------------------
 
-# 39. ROS2 /odom 확인
+# 35. ROS2 /odom 확인
 
 새 터미널에서:
 
@@ -1031,7 +910,7 @@ ROS2 ↔ Gazebo Bridge 연결은 정상입니다.
 
 ------------------------------------------------------------------------
 
-# 40. Bridge Launch 통합 완료 상태
+# 36. Bridge Launch 통합 완료 상태
 
 ``` text
 [✓] ros_gz_bridge
@@ -1064,57 +943,7 @@ ROS2 /odom
 
 ------------------------------------------------------------------------
 
-# 41. Bridge 단계 Git Commit
-
-변경 사항 확인:
-
-``` bash
-cd ~/ros2_icp_ekf_localization
-
-git status
-
-git diff
-```
-
-이번 단계에서 수정한 파일을 staging 합니다.
-
-``` bash
-git add src/robot_simulation/launch/simulation.launch.py
-git add src/robot_simulation/config/
-git add README.md
-git add docs/COMMANDS.md
-git add docs/TIMELINE.md
-```
-
-Bridge 동작 확인 이미지 또는 GIF를 추가했다면:
-
-``` bash
-git add docs/images/
-```
-
-Commit 전 확인:
-
-``` bash
-git status
-
-git diff --cached
-```
-
-권장 commit:
-
-``` bash
-git commit -m "feat: integrate ROS2 Gazebo bridge for cmd_vel and odometry"
-```
-
-Push:
-
-``` bash
-git push origin main
-```
-
-------------------------------------------------------------------------
-
-# 42. 다음 단계
+# 37. 다음 단계
 
 다음 개발 milestone은 **2D LiDAR Simulation**입니다.
 
@@ -1134,7 +963,7 @@ RViz LaserScan
 
 ------------------------------------------------------------------------
 
-# 43. Gazebo Wheel Joint State 확인
+# 38. Gazebo Wheel Joint State 확인
 
 ``` bash
 ign topic -l | grep -E "joint|joint_state"
@@ -1157,7 +986,7 @@ right_wheel_joint
 
 ------------------------------------------------------------------------
 
-# 44. ROS2 /joint_states 및 Wheel TF 확인
+# 39. ROS2 /joint_states 및 Wheel TF 확인
 
 Gazebo joint state가 `ros_gz_bridge`를 통해 ROS2로 전달되는지 확인합니다.
 
@@ -1183,7 +1012,7 @@ ros2 run tf2_ros tf2_echo base_link right_wheel_link
 
 ------------------------------------------------------------------------
 
-# 45. Gazebo / ROS2 LiDAR Topic 확인
+# 40. Gazebo / ROS2 LiDAR Topic 확인
 
 ``` bash
 ign topic -l | grep -E "scan|lidar"
@@ -1206,7 +1035,7 @@ sensor_msgs/msg/LaserScan
 
 ------------------------------------------------------------------------
 
-# 46. LiDAR Publish Frequency 확인
+# 41. LiDAR Publish Frequency 확인
 
 ``` bash
 ros2 topic hz /scan
@@ -1216,7 +1045,7 @@ ros2 topic hz /scan
 
 ------------------------------------------------------------------------
 
-# 47. LiDAR TF / Frame 확인
+# 42. LiDAR TF / Frame 확인
 
 ``` bash
 ros2 run tf2_ros tf2_echo base_link laser_link
@@ -1237,7 +1066,7 @@ LiDAR sensor frame을 ROS2 TF tree의 `laser_link`와 일치시킨 후 해당 �
 
 ------------------------------------------------------------------------
 
-# 48. RViz2 LaserScan 시각화
+# 43. RViz2 LaserScan 시각화
 
 ``` bash
 rviz2
@@ -1262,7 +1091,7 @@ OpenGl version: 4.6 (GLSL 4.6)
 
 ------------------------------------------------------------------------
 
-# 49. LiDAR 단계 완료 상태
+# 44. LiDAR 단계 완료 상태
 
 ``` text
 [✓] Gazebo GPU LiDAR
@@ -1278,7 +1107,7 @@ OpenGl version: 4.6 (GLSL 4.6)
 
 ------------------------------------------------------------------------
 
-# 50. 다음 단계
+# 45. 다음 단계
 
 다음 개발 milestone은 **IMU Simulation**입니다.
 
@@ -1296,7 +1125,7 @@ Localization Pipeline
 
 ------------------------------------------------------------------------
 
-# 51. Gazebo IMU System 및 Sensor 확인
+# 46. Gazebo IMU System 및 Sensor 확인
 
 `empty_world.sdf`에 Gazebo IMU system을 추가하고 `amr.urdf.xacro`의 `imu_link`에 IMU sensor를 연결한 후 빌드합니다.
 
@@ -1336,7 +1165,7 @@ linear_acceleration
 
 ------------------------------------------------------------------------
 
-# 52. ROS2 /imu Bridge 확인
+# 47. ROS2 /imu Bridge 확인
 
 `bridge.yaml`에 Gazebo `/imu` → ROS2 `/imu` bridge를 추가한 후 확인합니다.
 
@@ -1370,7 +1199,7 @@ ros2 topic hz /imu
 
 ------------------------------------------------------------------------
 
-# 53. IMU Frame 및 Motion Validation
+# 48. IMU Frame 및 Motion Validation
 
 IMU message frame 확인:
 
@@ -1406,7 +1235,7 @@ geometry_msgs/msg/Twist \
 
 ------------------------------------------------------------------------
 
-# 54. Localization Benchmark World 생성 및 검증
+# 49. Localization Benchmark World 생성 및 검증
 
 평가용 world:
 
@@ -1443,7 +1272,7 @@ ign gazebo \
 
 ------------------------------------------------------------------------
 
-# 55. World 및 Initial Pose Launch Argument 확인
+# 50. World 및 Initial Pose Launch Argument 확인
 
 Launch argument 확인:
 
@@ -1481,7 +1310,7 @@ yaw:=1.5708
 
 ------------------------------------------------------------------------
 
-# 56. Odometry TF 확인
+# 51. Odometry TF 확인
 
 ROS2 `/odom` message의 frame 설정을 확인합니다.
 
@@ -1518,7 +1347,7 @@ laser_link
 
 ------------------------------------------------------------------------
 
-# 57. SLAM Toolbox 설치 및 Configuration
+# 52. SLAM Toolbox 설치 및 Configuration
 
 설치 여부 확인:
 
@@ -1555,7 +1384,7 @@ max_laser_range: 10.0
 
 ------------------------------------------------------------------------
 
-# 58. SLAM Toolbox Mapping 실행
+# 53. SLAM Toolbox Mapping 실행
 
 먼저 benchmark simulation을 실행합니다.
 
@@ -1589,7 +1418,7 @@ ros2 run tf2_ros tf2_echo map odom
 
 ------------------------------------------------------------------------
 
-# 59. RViz2 Mapping Visualization
+# 54. RViz2 Mapping Visualization
 
 ``` bash
 rviz2
@@ -1619,7 +1448,7 @@ laser_link
 
 ------------------------------------------------------------------------
 
-# 60. Teleoperation을 이용한 Mapping 주행
+# 55. Teleoperation을 이용한 Mapping 주행
 
 Teleop package 실행:
 
@@ -1637,7 +1466,7 @@ sudo apt install ros-humble-teleop-twist-keyboard
 
 ------------------------------------------------------------------------
 
-# 61. Occupancy Grid Map 저장
+# 56. Occupancy Grid Map 저장
 
 Map 저장 디렉터리 생성:
 
@@ -1673,7 +1502,7 @@ cat ~/ros2_icp_ekf_localization/maps/localization_map.yaml
 
 ------------------------------------------------------------------------
 
-# 62. Saved Map Reload - Map Server 실행
+# 57. Saved Map Reload - Map Server 실행
 
 SLAM Toolbox를 종료한 후 저장된 map을 Map Server에서 다시 불러옵니다.
 
@@ -1688,7 +1517,7 @@ ros2 run nav2_map_server map_server \
 
 ------------------------------------------------------------------------
 
-# 63. Map Server Lifecycle Control
+# 58. Map Server Lifecycle Control
 
 현재 상태 확인:
 
@@ -1722,7 +1551,7 @@ active [3]
 
 ------------------------------------------------------------------------
 
-# 64. /map QoS 확인 및 OccupancyGrid 수신
+# 59. /map QoS 확인 및 OccupancyGrid 수신
 
 Map Server에서 `/map` topic은 durable map data를 제공하므로 subscriber QoS를 명시하여 확인합니다.
 
@@ -1755,7 +1584,7 @@ Height: 198 cells
 
 ------------------------------------------------------------------------
 
-# 65. RViz2 Saved Map Reload Validation
+# 60. RViz2 Saved Map Reload Validation
 
 RViz2 실행:
 
@@ -1797,7 +1626,7 @@ Map이 정상적으로 렌더링된다면 현재 mapping / map reload 기능 검
 
 ------------------------------------------------------------------------
 
-# 66. Mapping 단계 완료 상태
+# 61. Mapping 단계 완료 상태
 
 ``` text
 [✓] Gazebo IMU Simulation
@@ -1819,7 +1648,7 @@ Map이 정상적으로 렌더링된다면 현재 mapping / map reload 기능 검
 
 ------------------------------------------------------------------------
 
-# 67. 다음 단계
+# 62. 다음 단계
 
 다음 개발 milestone은 **Custom ICP Localization**입니다.
 
@@ -1841,7 +1670,7 @@ ICP Pose [x, y, yaw]
 
 ------------------------------------------------------------------------
 
-# 68. Custom ICP Localization Package 생성
+# 63. Custom ICP Localization Package 생성
 
 프로젝트 `src` 디렉터리에서 C++ package를 생성합니다.
 
@@ -1873,7 +1702,7 @@ find_package(nav_msgs REQUIRED)
 
 ------------------------------------------------------------------------
 
-# 69. ICP Package Build
+# 64. ICP Package Build
 
 ``` bash
 cd ~/ros2_icp_ekf_localization
@@ -1894,7 +1723,7 @@ Summary: 1 package finished
 
 ------------------------------------------------------------------------
 
-# 70. LaserScan -> 2D Point 변환 Node 실행
+# 65. LaserScan -> 2D Point 변환 Node 실행
 
 먼저 benchmark simulation을 실행합니다.
 
@@ -1938,7 +1767,7 @@ y = range * sin(angle)
 
 ------------------------------------------------------------------------
 
-# 71. /icp_scan_points PointCloud2 확인
+# 66. /icp_scan_points PointCloud2 확인
 
 Topic 확인:
 
@@ -1994,7 +1823,7 @@ docs/images/10_laserscan_pointcloud_overlap_rviz.gif
 
 ------------------------------------------------------------------------
 
-# 72. ICP Reference Map 실행 환경
+# 67. ICP Reference Map 실행 환경
 
 저장된 Occupancy Grid를 사용하기 위해 Map Server를 실행합니다.
 
@@ -2026,7 +1855,7 @@ active [3]
 
 ------------------------------------------------------------------------
 
-# 73. ICP Node의 /map 수신 확인
+# 68. ICP Node의 /map 수신 확인
 
 ICP node의 `/map` subscriber는 Map Server QoS와 맞추기 위해 다음 profile을 사용합니다.
 
@@ -2059,7 +1888,7 @@ Resolution: 0.05 m/cell
 
 ------------------------------------------------------------------------
 
-# 74. OccupancyGrid -> Reference PointCloud 변환 확인
+# 69. OccupancyGrid -> Reference PointCloud 변환 확인
 
 Reference point 생성 로그 확인:
 
@@ -2091,7 +1920,7 @@ y = origin_y + (row + 0.5) * resolution
 
 ------------------------------------------------------------------------
 
-# 75. /icp_map_points PointCloud2 확인
+# 70. /icp_map_points PointCloud2 확인
 
 Topic 확인:
 
@@ -2138,7 +1967,7 @@ width > 0
 
 ------------------------------------------------------------------------
 
-# 76. RViz2 OccupancyGrid / Reference PointCloud 검증
+# 71. RViz2 OccupancyGrid / Reference PointCloud 검증
 
 RViz2 실행:
 
@@ -2198,7 +2027,7 @@ docs/images/11_occupancygrid_reference_pointcloud_rviz.gif
 
 ------------------------------------------------------------------------
 
-# 77. Custom ICP 현재 진행 상태
+# 72. Custom ICP 현재 진행 상태
 
 ``` text
 [✓] icp_localization C++ package
@@ -2227,7 +2056,7 @@ docs/images/11_occupancygrid_reference_pointcloud_rviz.gif
 
 ------------------------------------------------------------------------
 
-# 78. 다음 단계
+# 73. 다음 단계
 
 다음 개발 단계는 **Current Scan Point를 Map Frame으로 변환하는 과정**입니다.
 
@@ -2260,7 +2089,7 @@ Reference Map Points와 Correspondence Search
 
 ------------------------------------------------------------------------
 
-# 79. TF Dependency 추가
+# 74. TF Dependency 추가
 
 `laser_link -> odom` 좌표 변환을 위해 `tf2`, `tf2_ros`, `tf2_geometry_msgs` dependency를 사용합니다.
 
@@ -2296,7 +2125,7 @@ source install/setup.bash
 
 ------------------------------------------------------------------------
 
-# 80. LaserScan Point -> Odom Frame 변환 확인
+# 75. LaserScan Point -> Odom Frame 변환 확인
 
 현재 `/scan` point는 `laser_link` 기준이므로 ROS2 TF를 사용해 `odom` 좌표계로 변환합니다.
 
@@ -2342,7 +2171,7 @@ docs/images/12_laserscan_odom_transform_rviz.gif
 
 ------------------------------------------------------------------------
 
-# 81. Reference Map Point를 Class Member로 유지
+# 76. Reference Map Point를 Class Member로 유지
 
 기존 `mapCallback()` 내부의 지역 변수는 callback 종료 시 사라지므로, 이후 `scanCallback()`에서 ICP Target으로 사용할 수 있도록 class member로 변경했습니다.
 
@@ -2369,7 +2198,7 @@ Reference map points available in scanCallback: XXXX
 
 ------------------------------------------------------------------------
 
-# 82. Odom Point -> Map Frame 변환
+# 77. Odom Point -> Map Frame 변환
 
 ICP는 Source와 Target이 동일한 좌표계에 있어야 하므로 `odom_points`를 `map` 좌표계로 변환합니다.
 
@@ -2405,7 +2234,7 @@ Frame: map
 
 ------------------------------------------------------------------------
 
-# 83. Map 관련 QoS 통일
+# 78. Map 관련 QoS 통일
 
 현재 개발 / RViz2 검증 단계에서는 map 관련 통신에 동일한 QoS profile을 사용합니다.
 
@@ -2436,7 +2265,7 @@ ros2 topic info /icp_scan_points_map --verbose
 
 ------------------------------------------------------------------------
 
-# 84. Map-Frame ICP Input 검증 실행 순서
+# 79. Map-Frame ICP Input 검증 실행 순서
 
 Benchmark simulation 실행:
 
@@ -2489,7 +2318,7 @@ ros2 run icp_localization icp_localization_node
 
 ------------------------------------------------------------------------
 
-# 85. /icp_map_points vs /icp_scan_points_map RViz2 검증
+# 80. /icp_map_points vs /icp_scan_points_map RViz2 검증
 
 RViz2 실행:
 
@@ -2542,7 +2371,7 @@ docs/images/13_icp_map_scan_alignment_rviz.png
 
 ------------------------------------------------------------------------
 
-# 86. Rotation Test
+# 81. Rotation Test
 
 제자리 회전:
 
@@ -2567,7 +2396,7 @@ tf2::TimePointZero
 
 ------------------------------------------------------------------------
 
-# 87. Custom ICP 현재 진행 상태
+# 82. Custom ICP 현재 진행 상태
 
 ``` text
 [✓] icp_localization C++ package
@@ -2595,58 +2424,7 @@ tf2::TimePointZero
 
 ------------------------------------------------------------------------
 
-# 88. 현재 단계 Git Commit
-
-먼저 검증 이미지를 다음 이름으로 저장합니다.
-
-``` text
-docs/images/13_icp_map_scan_alignment_rviz.png
-```
-
-변경 내용 확인:
-
-``` bash
-cd ~/ros2_icp_ekf_localization
-
-git status
-git diff
-```
-
-이번 단계의 파일을 명시적으로 staging 합니다.
-
-``` bash
-git add src/icp_localization/src/icp_localization_node.cpp
-git add src/icp_localization/CMakeLists.txt
-git add src/icp_localization/package.xml
-git add docs/images/12_laserscan_odom_transform_rviz.gif
-git add docs/images/13_icp_map_scan_alignment_rviz.png
-git add README.md
-git add docs/COMMANDS.md
-git add docs/TIMELINE.md
-```
-
-Commit 전 확인:
-
-``` bash
-git status
-git diff --cached
-```
-
-권장 commit:
-
-``` bash
-git commit -m "feat: prepare map-frame point clouds for ICP matching"
-```
-
-Push:
-
-``` bash
-git push origin main
-```
-
-------------------------------------------------------------------------
-
-# 89. 다음 단계
+# 83. 다음 단계
 
 다음 개발 단계는 **Nearest-Neighbor Correspondence Search**입니다.
 
@@ -2665,3 +2443,437 @@ Distance / Outlier Filtering
 
 초기 구현은 알고리즘 이해를 위해 brute-force nearest-neighbor 방식으로 진행합니다.
 
+------------------------------------------------------------------------
+
+# 84. Brute-Force Nearest-Neighbor Correspondence Search
+
+현재 map-frame Source scan point와 saved-map Target point는 동일한 `map` 좌표계에 있습니다.
+
+``` text
+Source
+map_scan_points
+
+Target
+map_points_
+```
+
+각 Source point마다 모든 Target point를 확인하여 가장 가까운 point를 찾습니다.
+
+거리 비교:
+
+``` text
+dx = target.x - source.x
+dy = target.y - source.y
+
+squared_distance = dx^2 + dy^2
+```
+
+최근접점 비교 단계에서는 `sqrt()`를 계산하지 않고 squared distance를 비교합니다.
+
+현재 방식:
+
+``` text
+Scan Point 1
+    ↓
+Map Point 전체 비교
+    ↓
+Nearest Map Point
+
+Scan Point 2
+    ↓
+Map Point 전체 비교
+    ↓
+Nearest Map Point
+```
+
+현재 구현은 ICP 원리 검증을 위한 brute-force 방식입니다.
+
+------------------------------------------------------------------------
+
+# 85. Correspondence 거리 통계 확인
+
+각 Source point와 선택된 nearest Target point를 하나의 correspondence로 저장합니다.
+
+``` text
+Correspondence
+├── source
+├── target
+└── squared_distance
+```
+
+노드 실행:
+
+``` bash
+ros2 run icp_localization icp_localization_node
+```
+
+Correspondence 로그 예:
+
+``` text
+Correspondences: 360, mean nearest distance: 0.0162 m
+```
+
+회전 중에도 평균 nearest distance가 약 수 cm 수준에서 유지되는지 확인합니다.
+
+------------------------------------------------------------------------
+
+# 86. Maximum Correspondence Distance / Outlier Rejection
+
+Nearest point라고 해서 항상 올바른 correspondence인 것은 아닙니다.
+
+현재 기본 threshold:
+
+``` text
+max_correspondence_distance = 0.15 m
+```
+
+출력 로그:
+
+``` text
+Raw: 360
+Valid: 360
+Rejected: 0
+Raw mean: ...
+Valid mean: ...
+Raw max: ...
+Threshold: 0.15 m
+```
+
+검증을 위해 threshold를 일시적으로 `0.05 m`로 낮춰 실제 rejection이 발생하는지 확인했습니다.
+
+실제 확인 예:
+
+``` text
+Raw: 360 | Valid: 358 | Rejected: 2
+Raw: 360 | Valid: 355 | Rejected: 5
+Raw: 360 | Valid: 351 | Rejected: 9
+```
+
+정상 조건:
+
+``` text
+Raw = Valid + Rejected
+Valid mean <= Raw mean
+```
+
+검증 후 threshold는 다시 `0.15 m`로 복원합니다.
+
+------------------------------------------------------------------------
+
+# 87. Centroid 및 2D Rigid Correction
+
+Outlier rejection을 통과한 valid correspondence만 사용합니다.
+
+Source / Target centroid:
+
+``` text
+source_centroid = mean(source points)
+target_centroid = mean(target points)
+```
+
+각 point에서 centroid를 제거한 centered coordinates를 이용해 rotation correction을 계산합니다.
+
+최종 incremental correction:
+
+``` text
+delta_x
+delta_y
+delta_yaw
+```
+
+Translation:
+
+``` text
+t = target_centroid - R * source_centroid
+```
+
+기존 pose와 correction 합성:
+
+``` text
+T_new = Delta_T * T_old
+```
+
+검증 로그 예:
+
+``` text
+ICP Correction |
+dx: 0.01139 m |
+dy: 0.00763 m |
+dyaw: 0.00138 rad |
+mean: 0.02343 -> 0.01751 m
+```
+
+보정 후 mean distance가 감소하는지 확인합니다.
+
+------------------------------------------------------------------------
+
+# 88. 한 LaserScan 내부 ICP Iteration / Convergence
+
+기존 1-scan 1-correction 구조를 한 LaserScan 내부 반복 구조로 변경했습니다.
+
+``` text
+LaserScan 1 frame
+      ↓
+Correspondence
+      ↓
+Outlier Rejection
+      ↓
+Rigid Correction
+      ↓
+Pose Update
+      ↓
+Correspondence 재계산
+      ↓
+반복
+```
+
+현재 설정:
+
+``` text
+Maximum iterations: 10
+Translation convergence threshold: 0.001 m
+Rotation convergence threshold: 0.001 rad
+```
+
+정상 로그 예:
+
+``` text
+ICP Iteration |
+iter: 1/10 |
+converged: true |
+Raw: 360 |
+Valid: 360 |
+Rejected: 0 |
+Raw mean: 0.01372 m |
+mean: 0.01372 -> 0.01372 m
+```
+
+Final correction:
+
+``` text
+Final Correction |
+dx: 0.000000 m |
+dy: 0.000000 m |
+dyaw: 0.000000 rad |
+map_to_odom: (0.01555, 0.02279, -0.00001)
+```
+
+정지 상태에서 correction이 0 근처로 수렴하는 것을 확인했습니다.
+
+------------------------------------------------------------------------
+
+# 89. ICP Localization 통합 Launch
+
+기존에는 다음 항목을 여러 터미널에서 각각 실행했습니다.
+
+``` text
+Gazebo Simulation
+Map Server
+Map Server Lifecycle Configure / Activate
+Temporary map -> odom Static TF
+ICP Localization Node
+```
+
+현재는 다음 launch 파일로 통합했습니다.
+
+``` text
+src/robot_simulation/launch/localization_icp.launch.py
+```
+
+빌드:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+colcon build \
+  --symlink-install \
+  --packages-select robot_simulation icp_localization
+
+source install/setup.bash
+```
+
+실행:
+
+``` bash
+ros2 launch robot_simulation localization_icp.launch.py
+```
+
+------------------------------------------------------------------------
+
+# 90. LifecycleNode namespace 오류 수정
+
+초기 통합 launch 실행 시 다음 오류가 발생했습니다.
+
+``` text
+TypeError:
+LifecycleNode.__init__() missing 1 required keyword-only argument: 'namespace'
+```
+
+Map Server LifecycleNode에 namespace를 명시하여 해결했습니다.
+
+``` python
+map_server = LifecycleNode(
+    package='nav2_map_server',
+    executable='map_server',
+    name='map_server',
+    namespace='',
+    ...
+)
+```
+
+------------------------------------------------------------------------
+
+# 91. ROS2 /clock Publisher 확인
+
+통합 launch에서 `use_sim_time=true`를 사용하지만 ICP throttled log가 출력되지 않는 현상을 확인했습니다.
+
+ROS2 clock 상태 확인:
+
+``` bash
+ros2 topic list
+```
+
+``` bash
+ros2 topic info /clock
+```
+
+문제 상태:
+
+``` text
+Type: rosgraph_msgs/msg/Clock
+Publisher count: 0
+Subscription count: 4
+```
+
+`/clock` topic 이름은 존재하지만 실제 simulation time publisher가 없는 상태였습니다.
+
+Gazebo clock 확인:
+
+``` bash
+ign topic -l | grep clock
+```
+
+------------------------------------------------------------------------
+
+# 92. Gazebo /clock -> ROS2 /clock Bridge
+
+임시 수동 검증:
+
+``` bash
+ros2 run ros_gz_bridge parameter_bridge \
+'/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock'
+```
+
+수동 bridge 실행 직후 ICP throttled log와 iteration log가 정상적으로 출력되는 것을 확인했습니다.
+
+최종적으로 `/clock`은 별도 터미널이 아니라 기존 bridge YAML에 추가합니다.
+
+``` yaml
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "ignition.msgs.Clock"
+  direction: IGN_TO_ROS
+```
+
+Clock publisher 확인:
+
+``` bash
+ros2 topic info /clock
+```
+
+정상 기준:
+
+``` text
+Publisher count: 1
+```
+
+Clock message 확인:
+
+``` bash
+ros2 topic echo /clock --once
+```
+
+------------------------------------------------------------------------
+
+# 93. LaserScan Timestamp 기반 TF Lookup
+
+기존 방식:
+
+``` text
+tf2::TimePointZero
+```
+
+기존 방식은 가장 최신 TF를 가져오기 때문에 로봇 이동 중 LaserScan 측정 시간과 TF 시간이 다를 수 있습니다.
+
+현재 방식:
+
+``` cpp
+const rclcpp::Time scan_time(
+    msg->header.stamp
+);
+
+auto transform =
+    tf_buffer_->lookupTransform(
+        "odom",
+        msg->header.frame_id,
+        scan_time,
+        rclcpp::Duration::from_seconds(0.1)
+    );
+```
+
+검증 로그:
+
+``` text
+Timestamp-synced TF |
+scan: ... sec |
+frame: laser_link -> odom
+```
+
+이 로그가 나오면 해당 LaserScan timestamp에 대응되는 TF lookup이 성공한 것입니다.
+
+------------------------------------------------------------------------
+
+# 94. 현재 Custom ICP 진행 상태
+
+``` text
+[✓] LaserScan -> 2D Point conversion
+[✓] OccupancyGrid -> persistent reference map points
+[✓] laser_link -> odom transform
+[✓] odom -> map transform
+[✓] Brute-force nearest-neighbor correspondence search
+[✓] Correspondence distance calculation
+[✓] Maximum correspondence-distance filtering
+[✓] Outlier rejection
+[✓] Source / Target centroid
+[✓] delta_x / delta_y / delta_yaw
+[✓] Internal map_to_odom_ correction
+[✓] One-scan ICP iteration
+[✓] Convergence condition
+[✓] Integrated localization launch
+[✓] Gazebo /clock -> ROS2 /clock
+[✓] LaserScan timestamp-aligned TF lookup
+
+[ ] Dynamic map -> odom TF broadcast
+[ ] Remove temporary static map -> odom
+[ ] Moving-robot localization validation
+[ ] ICP quantitative accuracy / runtime evaluation
+```
+
+------------------------------------------------------------------------
+
+# 95. 다음 단계
+
+다음 개발 단계는 custom ICP node가 내부적으로 계산 중인 `map_to_odom_` 값을 실제 ROS2 TF로 발행하는 것입니다.
+
+``` text
+ICP map_to_odom_
+      ↓
+tf2_ros TransformBroadcaster
+      ↓
+map -> odom
+      ↓
+ROS2 TF Tree
+```
+
+완료 후 `localization_icp.launch.py`의 임시 static `map -> odom` publisher를 제거하고 이동 중 localization을 검증합니다.

@@ -138,7 +138,8 @@ ros2_icp_ekf_localization/
 │   │   │   ├── bridge.yaml
 │   │   │   └── slam_toolbox.yaml
 │   │   ├── launch/
-│   │   │   └── simulation.launch.py
+│   │   │   ├── simulation.launch.py
+│   │   │   └── localization_icp.launch.py
 │   │   └── worlds/
 │   │       ├── empty_world.sdf
 │   │       └── localization_world.sdf
@@ -727,7 +728,7 @@ When only Map Server is running, `map -> odom` is not published. Therefore, RViz
 
 **Status: In Progress**
 
-The custom 2D ICP localization package is being implemented in C++ using ROS2 sensor, TF, odometry-frame, and saved-map data directly.
+The custom 2D ICP localization package is implemented in C++ using the saved Occupancy Grid, current 2D LiDAR scan, odometry-frame TF, and an internally maintained `map -> odom` estimate.
 
 Current processing pipeline:
 
@@ -740,28 +741,46 @@ OccupancyGrid -> Occupied Cells
       v
 map_points_  [Target / map frame]
       |
-      +--------------------------------------+
-                                             |
-Current LiDAR /scan                          |
-      |                                      |
-      v                                      |
-LaserScan -> 2D Points [laser_link]          |
-      |                                      |
-      v                                      |
-TF: laser_link -> odom                       |
-      |                                      |
-      v                                      |
-odom_points                                  |
-      |                                      |
-      v                                      |
-Initial T_map_odom                           |
-      |                                      |
-      v                                      |
-map_scan_points [Source / map frame] --------+
-                                             |
-                                             v
-                                  Correspondence Search
-                                       (Next Step)
+      +-----------------------------------------------------------+
+                                                                  |
+Current LiDAR /scan                                               |
+      |                                                           |
+      v                                                           |
+LaserScan -> 2D Points [laser_link]                               |
+      |                                                           |
+      v                                                           |
+Timestamp-aligned TF: laser_link -> odom                          |
+      |                                                           |
+      v                                                           |
+odom_points                                                       |
+      |                                                           |
+      v                                                           |
+Current T_map_odom                                                |
+      |                                                           |
+      v                                                           |
+map_scan_points [Source / map frame] -----------------------------+
+                                                                  |
+                                                                  v
+                                                Nearest Neighbor Search
+                                                                  |
+                                                                  v
+                                                     Correspondence Pairs
+                                                                  |
+                                                                  v
+                                                        Outlier Rejection
+                                                                  |
+                                                                  v
+                                                 Source / Target Centroids
+                                                                  |
+                                                                  v
+                                             2D Rigid Correction Estimation
+                                                delta_x / delta_y / delta_yaw
+                                                                  |
+                                                                  v
+                                                   T_map_odom Update
+                                                                  |
+                                                                  v
+                                              Repeat Until Convergence
 ```
 
 ### ICP ROS2 Package
@@ -870,15 +889,15 @@ Dynamic RViz2 validation confirmed that the transformed scan follows the robot m
 
 ### Odom to Map Frame Transformation
 
-For ICP comparison, both the current scan and saved-map reference points must use the same coordinate frame.
+For ICP comparison, both the current scan and saved-map reference points use the `map` coordinate frame.
 
-A `Pose2D` structure stores the current `map -> odom` estimate:
+A `Pose2D` structure stores the current internal `map -> odom` estimate:
 
 ```text
 [x, y, yaw]
 ```
 
-The current benchmark begins with an identity initial estimate:
+The benchmark starts from an identity initial estimate:
 
 ```text
 x   = 0.0
@@ -895,9 +914,244 @@ Frame: map
 
 This topic does **not** create a new map. It represents the current LiDAR observation expressed in the saved map coordinate frame.
 
-### Map-Frame ICP Input Validation
+### Nearest-Neighbor Correspondence Search
 
-The two ICP point sets are now directly comparable:
+Each current Source scan point is matched with the closest Target map point.
+
+The first implementation intentionally uses brute-force search:
+
+```text
+For each Source scan point
+      |
+      v
+Compare against every Target map point
+      |
+      v
+Select minimum squared Euclidean distance
+      |
+      v
+Create Source <-> Target correspondence
+```
+
+Squared distance is used during nearest-neighbor comparison:
+
+```text
+distance^2 = dx^2 + dy^2
+```
+
+This avoids an unnecessary square root for every map-point comparison.
+
+The brute-force implementation is retained at this stage because it makes the ICP matching process explicit and easy to validate. A KD-tree can be introduced later for performance optimization.
+
+### Correspondence Filtering / Outlier Rejection
+
+A nearest map point is not automatically a trustworthy correspondence. Distant pairs can be caused by measurement noise, dynamic objects, map mismatch, incorrect nearest-neighbor association, or initial pose error.
+
+A maximum correspondence-distance threshold is therefore applied before rigid-transform estimation.
+
+The normal development value is currently:
+
+```text
+Maximum correspondence distance: 0.15 m
+```
+
+For validation, the threshold was temporarily reduced to `0.05 m`. During this test, the system correctly rejected distant correspondences while preserving the identity:
+
+```text
+Raw = Valid + Rejected
+```
+
+Observed validation examples included:
+
+```text
+Raw: 360 | Valid: 358 | Rejected: 2
+Raw: 360 | Valid: 355 | Rejected: 5
+Raw: 360 | Valid: 351 | Rejected: 9
+```
+
+The threshold was then restored to `0.15 m` so that the initial ICP alignment has more tolerance before convergence.
+
+### Centroid and 2D Rigid Correction
+
+Only valid correspondences are used to estimate the rigid correction.
+
+The Source and Target centroids are calculated first:
+
+```text
+source_centroid = mean(Source points)
+target_centroid = mean(Target points)
+```
+
+Subtracting each centroid places both point sets around a common origin so that the rotation component can be estimated independently of the overall translation.
+
+The 2D incremental rotation is calculated from the centered correspondence pairs, and translation is then recovered from:
+
+```text
+t = target_centroid - R * source_centroid
+```
+
+The resulting incremental correction is:
+
+```text
+delta_x
+delta_y
+delta_yaw
+```
+
+The correction is composed with the previous pose estimate as:
+
+```text
+T_new = Delta_T * T_old
+```
+
+rather than simply adding translation values without accounting for rotation.
+
+### ICP Iteration and Convergence
+
+The ICP solver now repeats correspondence search and rigid correction multiple times for the **same LaserScan frame**.
+
+```text
+One LaserScan
+      |
+      v
+Correspondence Search
+      |
+      v
+Outlier Rejection
+      |
+      v
+Rigid Correction
+      |
+      v
+Update Temporary Pose
+      |
+      +----> Repeat
+```
+
+Current convergence settings:
+
+```text
+Maximum iterations: 10
+Translation convergence threshold: 0.001 m
+Rotation convergence threshold: 0.001 rad
+```
+
+The iteration stops early when both the translation correction magnitude and rotation correction are sufficiently small.
+
+Stationary validation confirmed convergence. After the initial correction, subsequent scans converged at the first iteration with correction values effectively equal to zero.
+
+Example observed result:
+
+```text
+ICP Iteration | iter: 1/10 | converged: true
+Raw: 360 | Valid: 360 | Rejected: 0
+Raw mean: 0.01372 m
+mean: 0.01372 -> 0.01372 m
+
+Final Correction
+dx: 0.000000 m
+dy: 0.000000 m
+dyaw: 0.000000 rad
+map_to_odom: (0.01555, 0.02279, -0.00001)
+```
+
+An earlier correction also reduced the correspondence mean distance from approximately `0.02343 m` to `0.01751 m`, confirming that the rigid correction moved the Source point set toward the Target point set before convergence.
+
+### LaserScan Timestamp-Aligned TF
+
+The previous implementation used:
+
+```text
+tf2::TimePointZero
+```
+
+which requested the latest available TF.
+
+This can introduce a temporal mismatch while the robot is moving because the LiDAR measurement timestamp and latest TF timestamp may differ.
+
+The TF lookup now uses the actual LaserScan timestamp:
+
+```text
+scan_time = msg->header.stamp
+lookupTransform(
+    target = odom,
+    source = laser frame,
+    time   = scan_time
+)
+```
+
+A `0.1 s` lookup timeout is used.
+
+This change ensures that a LaserScan is transformed using the robot pose corresponding to the scan measurement time rather than an unrelated latest transform.
+
+### Simulation Clock Bridge
+
+The localization nodes use:
+
+```text
+use_sim_time = true
+```
+
+During integration testing, `/clock` existed in the ROS2 graph but initially had:
+
+```text
+Publisher count: 0
+```
+
+As a result, ROS simulation time did not advance and time-dependent throttled logs / timestamp processing did not behave as expected.
+
+Gazebo simulation time was added to the existing ROS-Gazebo bridge configuration:
+
+```text
+Gazebo /clock
+      |
+      v
+ros_gz_bridge
+      |
+      v
+ROS2 /clock
+```
+
+The `/clock` bridge is managed together with the other bridge topics in:
+
+```text
+src/robot_simulation/config/bridge.yaml
+```
+
+This allows the Map Server and ICP node to keep `use_sim_time=true` without requiring a separate Clock bridge terminal.
+
+### Integrated ICP Localization Launch
+
+A dedicated launch file was added:
+
+```text
+src/robot_simulation/launch/localization_icp.launch.py
+```
+
+It starts the current localization test environment from a single command:
+
+```text
+Gazebo benchmark simulation
+robot_state_publisher
+robot spawn
+ROS-Gazebo bridge
+Nav2 Map Server
+Map Server lifecycle configure / activate
+temporary identity map -> odom TF
+icp_localization_node
+```
+
+Run:
+
+```bash
+ros2 launch robot_simulation localization_icp.launch.py
+```
+
+The dedicated launch keeps the current ICP development environment repeatable while reducing the previous multi-terminal startup sequence.
+
+### Map-Frame ICP Visualization
+
+The two ICP point sets remain directly visualizable in RViz2:
 
 ```text
 Target
@@ -911,7 +1165,7 @@ Frame: map
 Source: current LiDAR observation
 ```
 
-The map-related ROS2 interfaces currently share one QoS profile for development and RViz2 validation:
+The map-related ROS2 interfaces currently share one development / RViz2 QoS profile:
 
 ```text
 History: Keep Last
@@ -926,43 +1180,57 @@ The shared profile is used by:
 - `/icp_map_points` publisher
 - `/icp_scan_points_map` publisher
 
-A temporary identity `map -> odom` static transform is used only to keep the RViz2 TF tree connected during this validation stage. It will be removed when the custom localization node publishes the real transform.
-
-RViz2 validation shows the current LiDAR scan points following the same wall geometry as the saved-map reference points, with a small residual offset still visible before ICP correction.
-
 ![ICP Map-Frame Input Alignment](docs/images/13_icp_map_scan_alignment_rviz.png)
 
 ### Current Limitation
 
-The current TF lookup uses the latest available transform (`tf2::TimePointZero`). During robot rotation, a small map/scan offset can therefore be visible because the LiDAR measurement timestamp and the TF timestamp are not yet explicitly synchronized.
+The calculated `map_to_odom_` correction is currently maintained and applied **inside the custom ICP node**.
 
-Timestamp-aligned TF lookup will be refined before quantitative localization evaluation.
-
-### Current ICP Input Status
+The real ROS2 dynamic TF:
 
 ```text
-Reference / Target
-map_points_
-Topic: /icp_map_points
-Frame: map
-
-Current Scan / Source
-map_scan_points
-Topic: /icp_scan_points_map
-Frame: map
+map -> odom
 ```
 
-The input-preparation stage is complete enough to begin the first ICP algorithm step.
+is not yet broadcast by the ICP node.
+
+Therefore, `localization_icp.launch.py` still starts a temporary identity `map -> odom` static transform to keep the ROS TF tree connected for RViz2 and current development validation.
+
+This temporary static transform must be removed when the custom ICP node begins broadcasting its calculated dynamic `map -> odom` transform.
+
+### Current ICP Status
+
+```text
+[✓] LaserScan -> 2D Point conversion
+[✓] OccupancyGrid -> persistent map reference points
+[✓] laser_link -> odom transformation
+[✓] odom -> map transformation
+[✓] Map Target / Scan Source RViz2 validation
+[✓] Brute-force nearest-neighbor correspondence search
+[✓] Correspondence distance statistics
+[✓] Maximum-distance outlier rejection
+[✓] Source / Target centroid calculation
+[✓] 2D delta_x / delta_y / delta_yaw estimation
+[✓] Internal map_to_odom_ correction update
+[✓] ICP iteration for one LaserScan
+[✓] Convergence condition
+[✓] Gazebo /clock -> ROS2 /clock bridge
+[✓] LaserScan timestamp-aligned TF lookup
+[✓] Single-command localization development launch
+
+[ ] Dynamic map -> odom TF broadcast from custom ICP
+[ ] Remove temporary static map -> odom publisher
+[ ] Moving-robot localization validation
+[ ] Quantitative ICP accuracy / runtime evaluation
+```
 
 Next implementation steps:
 
-- Implement nearest-neighbor correspondence search
-- Measure source-to-target correspondence distances
-- Reject invalid / distant correspondences
-- Estimate the 2D rigid transformation
-- Update the `map -> odom` estimate
-- Iterate until convergence
-- Publish and evaluate the ICP pose
+- Broadcast the calculated `map -> odom` transform from the custom ICP node
+- Remove the temporary static identity `map -> odom` publisher
+- Validate ICP convergence while the robot translates and rotates
+- Measure localization accuracy and processing time
+- Continue toward EKF integration
 
 ---
 
@@ -1171,11 +1439,11 @@ yaw:=1.5708
 ```text
 [████████████████████] AMR / Simulation
 [████████████████████] Sensors / Mapping
-[██████░░░░░░░░░░░░░░] ICP Localization
+[██████████████░░░░░░] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
 [██░░░░░░░░░░░░░░░░░░] Evaluation Infrastructure
 ```
 
 Current milestone:
 
-**AMR simulation, sensor integration, benchmark mapping, and saved-map validation are complete. Custom ICP input preparation now includes persistent map reference points, `laser_link -> odom -> map` scan transformation, unified map-related QoS, and RViz2 validation of `/icp_map_points` against `/icp_scan_points_map`. Next: implement nearest-neighbor correspondence search.**
+**AMR simulation, sensor integration, benchmark mapping, and saved-map validation are complete. The custom ICP pipeline now includes nearest-neighbor correspondence search, outlier rejection, centroid-based 2D rigid correction, iterative convergence, an internal `map_to_odom_` update, Gazebo `/clock` bridging, and LaserScan timestamp-aligned TF lookup. Next: broadcast the calculated dynamic `map -> odom` TF and remove the temporary static transform.**

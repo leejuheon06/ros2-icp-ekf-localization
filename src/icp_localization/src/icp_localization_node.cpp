@@ -3,6 +3,7 @@
 #include <vector>
 #include <functional>
 #include <cstddef>
+#include <limits>
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -31,6 +32,13 @@ struct Pose2D
     double x;
     double y;
     double yaw;
+};
+
+struct Correspondence
+{
+    Point2D source;             // 현재 LiDAR scan에서 나온 point (map_scan_points)
+    Point2D target;             // 저장된 OccupancyGrid에서 추출한 reference map point
+    double squared_distance;    // source와 target 사이 거리의 제곱
 };
 
 // ICP Localization Node
@@ -326,12 +334,52 @@ private:
             // laser_link -> odom TF 조회
             // -------------------------------------------------
 
+            // -------------------------------------------------
+            // LaserScan timestamp와 동일한 시점의 TF 조회
+            // -------------------------------------------------
+            //
+            // 기존 tf2::TimePointZero는 "가장 최신 TF"를 가져온다.
+            //
+            // 하지만 로봇이 움직이는 동안에는:
+            //
+            //   LaserScan 측정 시각 != 가장 최신 TF 시각
+            //
+            // 이 될 수 있기 때문에 scan point를 잘못된 robot pose로
+            // 변환하는 시간 오차가 발생할 수 있다.
+            //
+            // 따라서 현재 LaserScan의 header.stamp를 사용해서
+            // 해당 scan이 실제 측정된 시각의 laser_link -> odom
+            // transform을 조회한다.
+            // -------------------------------------------------
+            const rclcpp::Time scan_time(
+                msg->header.stamp
+            );
+
+
             auto transform =
                 tf_buffer_->lookupTransform(
                     "odom",
                     msg->header.frame_id,
-                    tf2::TimePointZero
+                    scan_time,
+                    rclcpp::Duration::from_seconds(0.1)
                 );
+
+
+            // -------------------------------------------------
+            // Timestamp synchronization validation
+            // -------------------------------------------------
+            //
+            // lookupTransform()이 성공했다는 것은 tf_buffer_ 안에
+            // scan_time에 대응되는 TF history가 존재한다는 의미다.
+            // -------------------------------------------------
+            RCLCPP_INFO_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                2000,
+                "Timestamp-synced TF | scan: %.3f sec | frame: %s -> odom",
+                scan_time.seconds(),
+                msg->header.frame_id.c_str()
+            );
 
 
             // -------------------------------------------------
@@ -471,6 +519,622 @@ private:
 
                 map_scan_points.push_back(
                     map_point
+                );
+            }
+
+            // =================================================
+            // ICP Iteration + Convergence
+            // =================================================
+            const double max_correspondence_distance =
+                0.15;
+
+            // 한 개의 LaserScan 프레임에 대해 최대 10회 반복
+            const int max_icp_iterations =
+                10;
+
+            const double translation_convergence_threshold =
+                0.001;
+
+            const double rotation_convergence_threshold =
+                0.001;
+
+
+            if (map_points_.empty())
+            {
+                RCLCPP_WARN_THROTTLE(
+                    this->get_logger(),
+                    *this->get_clock(),
+                    2000,
+                    "Reference map points are not available yet"
+                );
+            }
+            else
+            {
+                Pose2D iteration_pose =
+                    map_to_odom_;
+
+                bool converged =
+                    false;
+
+                int performed_iterations =
+                    0;
+
+                std::size_t final_raw_count =
+                    0;
+
+                std::size_t final_valid_count =
+                    0;
+
+                std::size_t final_rejected_count =
+                    0;
+
+                double final_raw_mean_distance =
+                    0.0;
+
+                double final_valid_mean_distance =
+                    0.0;
+
+                double final_raw_max_distance =
+                    0.0;
+
+                double final_corrected_mean_distance =
+                    0.0;
+
+                double final_delta_x =
+                    0.0;
+
+                double final_delta_y =
+                    0.0;
+
+                double final_delta_yaw =
+                    0.0;
+
+
+                // 한 개의 LaserScan에 대해 correspondence와 correction을
+                // 반복해서 계산하고, correction이 충분히 작아지면 종료한다.
+                for (
+                    int iteration = 0;
+                    iteration < max_icp_iterations;
+                    ++iteration
+                )
+                {
+                    // ---------------------------------------------
+                    // Current Pose -> Map Frame Scan Points
+                    // ---------------------------------------------
+                    map_scan_points.clear();
+
+                    map_scan_points.reserve(
+                        odom_points.size()
+                    );
+
+
+                    const double iteration_cos_yaw =
+                        std::cos(
+                            iteration_pose.yaw
+                        );
+
+                    const double iteration_sin_yaw =
+                        std::sin(
+                            iteration_pose.yaw
+                        );
+
+
+                    for (const auto& point : odom_points)
+                    {
+                        Point2D map_point;
+
+
+                        map_point.x =
+                            iteration_cos_yaw * point.x
+                            - iteration_sin_yaw * point.y
+                            + iteration_pose.x;
+
+
+                        map_point.y =
+                            iteration_sin_yaw * point.x
+                            + iteration_cos_yaw * point.y
+                            + iteration_pose.y;
+
+
+                        map_scan_points.push_back(
+                            map_point
+                        );
+                    }
+
+
+                    // ---------------------------------------------
+                    // Nearest Neighbor + Outlier Rejection
+                    // ---------------------------------------------
+                    std::vector<Correspondence> correspondences;
+
+                    correspondences.reserve(
+                        map_scan_points.size()
+                    );
+
+
+                    std::size_t rejected_correspondence_count =
+                        0;
+
+                    double raw_distance_sum =
+                        0.0;
+
+                    double valid_distance_sum =
+                        0.0;
+
+                    double maximum_raw_distance =
+                        0.0;
+
+
+                    for (const auto& scan_point : map_scan_points)
+                    {
+                        double minimum_squared_distance =
+                            std::numeric_limits<double>::max();
+
+
+                        Point2D nearest_map_point;
+
+
+                        for (const auto& map_point : map_points_)
+                        {
+                            const double dx =
+                                map_point.x - scan_point.x;
+
+                            const double dy =
+                                map_point.y - scan_point.y;
+
+
+                            const double squared_distance =
+                                dx * dx + dy * dy;
+
+
+                            if (
+                                squared_distance <
+                                minimum_squared_distance
+                            )
+                            {
+                                minimum_squared_distance =
+                                    squared_distance;
+
+                                nearest_map_point =
+                                    map_point;
+                            }
+                        }
+
+
+                        const double nearest_distance =
+                            std::sqrt(
+                                minimum_squared_distance
+                            );
+
+
+                        raw_distance_sum +=
+                            nearest_distance;
+
+                        if (
+                            nearest_distance >
+                            maximum_raw_distance
+                        )
+                        {
+                            maximum_raw_distance =
+                                nearest_distance;
+                        }
+
+
+                        if (
+                            nearest_distance >
+                            max_correspondence_distance
+                        )
+                        {
+                            ++rejected_correspondence_count;
+                            continue;
+                        }
+
+
+                        Correspondence correspondence;
+
+                        correspondence.source =
+                            scan_point;
+
+                        correspondence.target =
+                            nearest_map_point;
+
+                        correspondence.squared_distance =
+                            minimum_squared_distance;
+
+
+                        correspondences.push_back(
+                            correspondence
+                        );
+
+
+                        valid_distance_sum +=
+                            nearest_distance;
+                    }
+
+
+                    const std::size_t raw_correspondence_count =
+                        map_scan_points.size();
+
+
+                    const double raw_mean_distance =
+                        raw_correspondence_count == 0
+                        ? 0.0
+                        : raw_distance_sum /
+                          static_cast<double>(
+                              raw_correspondence_count
+                          );
+
+
+                    const double valid_mean_distance =
+                        correspondences.empty()
+                        ? 0.0
+                        : valid_distance_sum /
+                          static_cast<double>(
+                              correspondences.size()
+                          );
+
+
+                    if (correspondences.size() < 3)
+                    {
+                        RCLCPP_WARN_THROTTLE(
+                            this->get_logger(),
+                            *this->get_clock(),
+                            2000,
+                            "Not enough valid correspondences for ICP: %zu",
+                            correspondences.size()
+                        );
+
+                        break;
+                    }
+
+
+                    // ---------------------------------------------
+                    // Centroid
+                    // ---------------------------------------------
+                    Point2D source_centroid {
+                        0.0,
+                        0.0
+                    };
+
+                    Point2D target_centroid {
+                        0.0,
+                        0.0
+                    };
+
+
+                    for (const auto& correspondence : correspondences)
+                    {
+                        source_centroid.x +=
+                            correspondence.source.x;
+
+                        source_centroid.y +=
+                            correspondence.source.y;
+
+
+                        target_centroid.x +=
+                            correspondence.target.x;
+
+                        target_centroid.y +=
+                            correspondence.target.y;
+                    }
+
+
+                    const double correspondence_count =
+                        static_cast<double>(
+                            correspondences.size()
+                        );
+
+
+                    source_centroid.x /=
+                        correspondence_count;
+
+                    source_centroid.y /=
+                        correspondence_count;
+
+
+                    target_centroid.x /=
+                        correspondence_count;
+
+                    target_centroid.y /=
+                        correspondence_count;
+
+
+                    // ---------------------------------------------
+                    // Delta Yaw
+                    // ---------------------------------------------
+                    double rotation_dot_sum =
+                        0.0;
+
+                    double rotation_cross_sum =
+                        0.0;
+
+
+                    for (const auto& correspondence : correspondences)
+                    {
+                        const double source_x =
+                            correspondence.source.x -
+                            source_centroid.x;
+
+                        const double source_y =
+                            correspondence.source.y -
+                            source_centroid.y;
+
+
+                        const double target_x =
+                            correspondence.target.x -
+                            target_centroid.x;
+
+                        const double target_y =
+                            correspondence.target.y -
+                            target_centroid.y;
+
+
+                        rotation_dot_sum +=
+                            source_x * target_x +
+                            source_y * target_y;
+
+
+                        rotation_cross_sum +=
+                            source_x * target_y -
+                            source_y * target_x;
+                    }
+
+
+                    const double delta_yaw =
+                        std::atan2(
+                            rotation_cross_sum,
+                            rotation_dot_sum
+                        );
+
+
+                    const double cos_delta_yaw =
+                        std::cos(
+                            delta_yaw
+                        );
+
+                    const double sin_delta_yaw =
+                        std::sin(
+                            delta_yaw
+                        );
+
+
+                    // ---------------------------------------------
+                    // Delta X / Delta Y
+                    // ---------------------------------------------
+                    const double rotated_source_centroid_x =
+                        cos_delta_yaw * source_centroid.x -
+                        sin_delta_yaw * source_centroid.y;
+
+                    const double rotated_source_centroid_y =
+                        sin_delta_yaw * source_centroid.x +
+                        cos_delta_yaw * source_centroid.y;
+
+
+                    const double delta_x =
+                        target_centroid.x -
+                        rotated_source_centroid_x;
+
+                    const double delta_y =
+                        target_centroid.y -
+                        rotated_source_centroid_y;
+
+
+                    // ---------------------------------------------
+                    // Correction Validation
+                    // ---------------------------------------------
+                    double corrected_distance_sum =
+                        0.0;
+
+
+                    for (const auto& correspondence : correspondences)
+                    {
+                        const double corrected_source_x =
+                            cos_delta_yaw * correspondence.source.x
+                            - sin_delta_yaw * correspondence.source.y
+                            + delta_x;
+
+                        const double corrected_source_y =
+                            sin_delta_yaw * correspondence.source.x
+                            + cos_delta_yaw * correspondence.source.y
+                            + delta_y;
+
+
+                        const double corrected_dx =
+                            correspondence.target.x -
+                            corrected_source_x;
+
+                        const double corrected_dy =
+                            correspondence.target.y -
+                            corrected_source_y;
+
+
+                        corrected_distance_sum +=
+                            std::sqrt(
+                                corrected_dx * corrected_dx +
+                                corrected_dy * corrected_dy
+                            );
+                    }
+
+
+                    const double corrected_mean_distance =
+                        corrected_distance_sum /
+                        correspondence_count;
+
+
+                    // ---------------------------------------------
+                    // Delta_T * Current_T
+                    // ---------------------------------------------
+                    const double old_x =
+                        iteration_pose.x;
+
+                    const double old_y =
+                        iteration_pose.y;
+
+                    const double old_yaw =
+                        iteration_pose.yaw;
+
+
+                    iteration_pose.x =
+                        cos_delta_yaw * old_x -
+                        sin_delta_yaw * old_y +
+                        delta_x;
+
+                    iteration_pose.y =
+                        sin_delta_yaw * old_x +
+                        cos_delta_yaw * old_y +
+                        delta_y;
+
+
+                    const double updated_yaw =
+                        old_yaw +
+                        delta_yaw;
+
+
+                    iteration_pose.yaw =
+                        std::atan2(
+                            std::sin(updated_yaw),
+                            std::cos(updated_yaw)
+                        );
+
+
+                    performed_iterations =
+                        iteration + 1;
+
+
+                    final_raw_count =
+                        raw_correspondence_count;
+
+                    final_valid_count =
+                        correspondences.size();
+
+                    final_rejected_count =
+                        rejected_correspondence_count;
+
+                    final_raw_mean_distance =
+                        raw_mean_distance;
+
+                    final_valid_mean_distance =
+                        valid_mean_distance;
+
+                    final_raw_max_distance =
+                        maximum_raw_distance;
+
+                    final_corrected_mean_distance =
+                        corrected_mean_distance;
+
+                    final_delta_x =
+                        delta_x;
+
+                    final_delta_y =
+                        delta_y;
+
+                    final_delta_yaw =
+                        delta_yaw;
+
+
+                    const double translation_correction =
+                        std::hypot(
+                            delta_x,
+                            delta_y
+                        );
+
+
+                    if (
+                        translation_correction <
+                        translation_convergence_threshold &&
+                        std::abs(delta_yaw) <
+                        rotation_convergence_threshold
+                    )
+                    {
+                        converged =
+                            true;
+
+                        break;
+                    }
+                }
+
+
+                // 한 Scan에 대한 ICP 반복이 끝난 뒤에만
+                // 최종 pose를 map_to_odom_에 반영한다.
+                map_to_odom_ =
+                    iteration_pose;
+
+
+                // RViz publish용 map_scan_points도 최종 pose로 갱신한다.
+                map_scan_points.clear();
+
+                map_scan_points.reserve(
+                    odom_points.size()
+                );
+
+
+                const double final_cos_yaw =
+                    std::cos(
+                        map_to_odom_.yaw
+                    );
+
+                const double final_sin_yaw =
+                    std::sin(
+                        map_to_odom_.yaw
+                    );
+
+
+                for (const auto& point : odom_points)
+                {
+                    Point2D map_point;
+
+
+                    map_point.x =
+                        final_cos_yaw * point.x
+                        - final_sin_yaw * point.y
+                        + map_to_odom_.x;
+
+
+                    map_point.y =
+                        final_sin_yaw * point.x
+                        + final_cos_yaw * point.y
+                        + map_to_odom_.y;
+
+
+                    map_scan_points.push_back(
+                        map_point
+                    );
+                }
+
+
+                RCLCPP_INFO_THROTTLE(
+                    this->get_logger(),
+                    *this->get_clock(),
+                    2000,
+                    "ICP Iteration | iter: %d/%d | converged: %s | "
+                    "Raw: %zu | Valid: %zu | Rejected: %zu | "
+                    "Raw mean: %.5f m | mean: %.5f -> %.5f m | Raw max: %.5f m",
+                    performed_iterations,
+                    max_icp_iterations,
+                    converged ? "true" : "false",
+                    final_raw_count,
+                    final_valid_count,
+                    final_rejected_count,
+                    final_raw_mean_distance,
+                    final_valid_mean_distance,
+                    final_corrected_mean_distance,
+                    final_raw_max_distance
+                );
+
+
+                RCLCPP_INFO_THROTTLE(
+                    this->get_logger(),
+                    *this->get_clock(),
+                    2000,
+                    "Final Correction | "
+                    "dx: %.6f m | dy: %.6f m | dyaw: %.6f rad | "
+                    "map_to_odom: (%.5f, %.5f, %.5f)",
+                    final_delta_x,
+                    final_delta_y,
+                    final_delta_yaw,
+                    map_to_odom_.x,
+                    map_to_odom_.y,
+                    map_to_odom_.yaw
                 );
             }
 
@@ -784,12 +1448,12 @@ private:
             cloud_msg
         );
 
-        // Debug output
-        RCLCPP_INFO(
-            this->get_logger(),
-            "Converted LaserScan to %zu 2D points",
-            points.size()
-        );
+        // // Debug output
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "Converted LaserScan to %zu 2D points",
+        //     points.size()
+        // );
     }
 
     // =====================================================

@@ -287,3 +287,81 @@
 - Add maximum correspondence-distance filtering / outlier rejection
 - Continue to 2D rigid-transform estimation after correspondence validation
 
+## 2026-09-20
+
+### Nearest-Neighbor Correspondence Search
+- Added a `Correspondence` structure containing Source point, Target point, and squared distance
+- Implemented brute-force nearest-neighbor search between current map-frame LiDAR points and saved-map reference points
+- Used squared Euclidean distance during comparison to avoid unnecessary square-root calculations
+- Verified correspondence count and mean nearest distance during stationary and rotation tests
+- Observed mean nearest distances in the centimeter range while the map-frame scan remained aligned with the saved map
+
+### Correspondence Filtering / Outlier Rejection
+- Added a maximum correspondence-distance threshold
+- Separated Raw, Valid, and Rejected correspondence counts
+- Added Raw mean, Valid mean, and Raw maximum distance diagnostics
+- Temporarily reduced the threshold to `0.05 m` to validate real outlier removal
+- Verified `Raw = Valid + Rejected`
+- Verified that removing distant correspondences reduces or preserves the valid mean distance
+- Observed rejection examples including `358 / 2`, `355 / 5`, and `351 / 9` Valid / Rejected pairs from 360 Raw pairs
+- Restored the normal development threshold to `0.15 m`
+
+### 2D Rigid ICP Correction
+- Calculated Source and Target centroids from valid correspondences
+- Centered the two correspondence point sets around their centroids
+- Calculated the incremental 2D rotation correction `delta_yaw`
+- Calculated translation correction `delta_x` and `delta_y`
+- Composed the incremental correction with the existing `map_to_odom_` estimate using `T_new = Delta_T * T_old`
+- Recalculated map-frame scan points using the updated pose
+- Added correction-before / correction-after mean-distance validation
+- Verified an initial correction reduced mean correspondence distance from approximately `0.02343 m` to `0.01751 m`
+
+### ICP Iteration / Convergence
+- Changed the ICP flow from one correction per incoming scan to multiple iterations on one fixed LaserScan frame
+- Added a maximum of `10` iterations
+- Added translation convergence threshold of `0.001 m`
+- Added rotation convergence threshold of `0.001 rad`
+- Recomputed correspondences and rigid correction at each iteration
+- Verified stationary convergence with `converged: true`
+- Verified subsequent scans can converge at iteration `1/10` with correction values effectively equal to zero
+- Observed a stable internal `map_to_odom_` estimate near `(0.01555, 0.02279, -0.00001)` during stationary validation
+
+### ICP Localization Launch Integration
+- Added `localization_icp.launch.py`
+- Integrated benchmark simulation startup, Nav2 Map Server, lifecycle configure / activate, temporary `map -> odom` static TF, and custom ICP localization into one launch command
+- Fixed a ROS2 Humble `LifecycleNode` startup error by explicitly setting `namespace=''`
+- Verified the benchmark map loads as `199 x 198 @ 0.05 m/cell`
+- Verified the ICP node receives the map and converts it to `1748` reference points
+
+### Gazebo Simulation Clock Integration
+- Identified that ROS2 `/clock` existed with `Publisher count: 0` while nodes were configured with `use_sim_time=true`
+- Confirmed that the missing clock publisher prevented time-dependent throttled ICP logs from behaving normally
+- Verified a temporary manual Gazebo-to-ROS clock bridge immediately restored the ICP iteration logs
+- Added `/clock` to the existing ROS-Gazebo bridge YAML so a separate clock terminal is no longer required
+- Kept Map Server and ICP localization on simulation time
+
+### LaserScan Timestamp-Aligned TF
+- Replaced `tf2::TimePointZero` with the current `LaserScan.header.stamp`
+- Added a `0.1 s` TF lookup timeout
+- Verified timestamp-synchronized `laser_link -> odom` TF lookup
+- Removed the previous dependency on the latest available TF for scan transformation
+- Prepared the ICP pipeline for more reliable localization while the robot is moving
+
+### Current Milestone
+- Nearest-Neighbor Correspondence Search: Completed
+- Outlier Rejection: Completed
+- Centroid Calculation: Completed
+- 2D Rigid Correction: Completed
+- Internal `map_to_odom_` Update: Completed
+- ICP Iteration / Convergence: Completed
+- Integrated ICP Launch: Completed
+- Gazebo `/clock` Bridge: Completed
+- LaserScan Timestamp-Aligned TF: Completed
+- Dynamic ROS2 `map -> odom` TF Broadcast: Next
+
+### Next Step
+- Add a `tf2_ros::TransformBroadcaster` to the custom ICP node
+- Publish the calculated `map_to_odom_` as the real dynamic `map -> odom` TF
+- Remove the temporary static identity `map -> odom` publisher from `localization_icp.launch.py`
+- Validate localization while the robot translates and rotates
+- Begin ICP quantitative accuracy and runtime measurements
