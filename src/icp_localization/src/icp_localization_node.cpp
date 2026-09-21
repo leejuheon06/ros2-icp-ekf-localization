@@ -14,6 +14,7 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 #include "tf2/time.h"
 #include "tf2_ros/buffer.h"
@@ -147,6 +148,12 @@ public:
                 map_related_qos
             );
 
+        icp_pose_pub_ =
+            this->create_publisher<geometry_msgs::msg::PoseStamped>(
+                "/icp_pose",
+                10
+            );
+
         RCLCPP_INFO(
             this->get_logger(),
             "ICP Localization Node started"
@@ -235,16 +242,156 @@ private:
     }
 
 
+    bool publishIcpPose(
+        const rclcpp::Time& stamp)
+    {
+        try
+        {
+            // -------------------------------------------------
+            // odom -> base_footprint
+            // -------------------------------------------------
+            //
+            // ICP는 map -> odom을 추정한다.
+            // 최종 ICP robot pose는:
+            //
+            // T_map_base =
+            //     T_map_odom * T_odom_base
+            //
+            // 로 계산한다.
+            // -------------------------------------------------
+
+            const auto odom_to_base =
+                tf_buffer_->lookupTransform(
+                    "odom",
+                    "base_footprint",
+                    stamp,
+                    rclcpp::Duration::from_seconds(0.1)
+                );
+
+
+            const double odom_x =
+                odom_to_base.transform.translation.x;
+
+            const double odom_y =
+                odom_to_base.transform.translation.y;
+
+            const double odom_yaw =
+                tf2::getYaw(
+                    odom_to_base.transform.rotation
+                );
+
+
+            const double cos_map_yaw =
+                std::cos(
+                    map_to_odom_.yaw
+                );
+
+            const double sin_map_yaw =
+                std::sin(
+                    map_to_odom_.yaw
+                );
+
+
+            // -------------------------------------------------
+            // T_map_odom * T_odom_base
+            // -------------------------------------------------
+
+            const double map_base_x =
+                cos_map_yaw * odom_x
+                - sin_map_yaw * odom_y
+                + map_to_odom_.x;
+
+            const double map_base_y =
+                sin_map_yaw * odom_x
+                + cos_map_yaw * odom_y
+                + map_to_odom_.y;
+
+
+            const double map_base_yaw_raw =
+                map_to_odom_.yaw +
+                odom_yaw;
+
+            const double map_base_yaw =
+                std::atan2(
+                    std::sin(map_base_yaw_raw),
+                    std::cos(map_base_yaw_raw)
+                );
+
+
+            geometry_msgs::msg::PoseStamped pose_msg;
+
+            pose_msg.header.stamp =
+                stamp;
+
+            pose_msg.header.frame_id =
+                "map";
+
+
+            pose_msg.pose.position.x =
+                map_base_x;
+
+            pose_msg.pose.position.y =
+                map_base_y;
+
+            pose_msg.pose.position.z =
+                0.0;
+
+
+            const double half_yaw =
+                map_base_yaw * 0.5;
+
+            pose_msg.pose.orientation.x =
+                0.0;
+
+            pose_msg.pose.orientation.y =
+                0.0;
+
+            pose_msg.pose.orientation.z =
+                std::sin(
+                    half_yaw
+                );
+
+            pose_msg.pose.orientation.w =
+                std::cos(
+                    half_yaw
+                );
+
+
+            icp_pose_pub_->publish(
+                pose_msg
+            );
+
+
+            return true;
+        }
+        catch (
+            const tf2::TransformException& ex
+        )
+        {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                2000,
+                "Could not publish /icp_pose: %s",
+                ex.what()
+            );
+
+
+            return false;
+        }
+    }
+
+
     void mapCallback(
         const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
     {
-        RCLCPP_INFO(
-            this->get_logger(),
-            "Map received: width=%u, height=%u, resolution=%.3f",
-            msg->info.width,
-            msg->info.height,
-            msg->info.resolution
-        );
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "Map received: width=%u, height=%u, resolution=%.3f",
+        //     msg->info.width,
+        //     msg->info.height,
+        //     msg->info.resolution
+        // );
 
         // width = 0이면 index / width 계산이 불가능하므로
         // 비정상 map으로 판단한다.
@@ -324,11 +471,11 @@ private:
         }
 
 
-        RCLCPP_INFO(
-            this->get_logger(),
-            "Converted OccupancyGrid to %zu reference points",
-            map_points_.size()
-        );
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "Converted OccupancyGrid to %zu reference points",
+        //     map_points_.size()
+        // );
 
 
         // -------------------------------------------------
@@ -863,13 +1010,13 @@ private:
 
                     if (correspondences.size() < 3)
                     {
-                        RCLCPP_WARN_THROTTLE(
-                            this->get_logger(),
-                            *this->get_clock(),
-                            2000,
-                            "Not enough valid correspondences for ICP: %zu",
-                            correspondences.size()
-                        );
+                        // RCLCPP_WARN_THROTTLE(
+                        //     this->get_logger(),
+                        //     *this->get_clock(),
+                        //     2000,
+                        //     "Not enough valid correspondences for ICP: %zu",
+                        //     correspondences.size()
+                        // );
 
                         break;
                     }
@@ -1158,6 +1305,18 @@ private:
                 // map -> odom publisher는 제거해야 한다.
                 // -------------------------------------------------
                 broadcastMapToOdom(
+                    scan_time
+                );
+
+
+                // -------------------------------------------------
+                // Publish ICP robot pose
+                // -------------------------------------------------
+                //
+                // /icp_pose is the map-frame robot pose used as
+                // the EKF measurement.
+                // -------------------------------------------------
+                publishIcpPose(
                     scan_time
                 );
 
@@ -1624,6 +1783,10 @@ private:
     rclcpp::Publisher<
         sensor_msgs::msg::PointCloud2
     >::SharedPtr scan_points_map_pub_;
+
+    rclcpp::Publisher<
+        geometry_msgs::msg::PoseStamped
+    >::SharedPtr icp_pose_pub_;
 };
 
 

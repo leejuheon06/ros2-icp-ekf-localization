@@ -1,0 +1,16 @@
+ekf_localization_node:
+  ros__parameters:
+
+    # Prediction process noise.
+    # Initial tuning values, not measured benchmark results.
+    process_noise_xy: 0.02
+    process_noise_yaw: 0.02
+
+    # ICP measurement standard deviation.
+    # These are initial tuning values for R, not measured results.
+    icp_std_xy: 0.05
+    icp_std_yaw: 0.03
+
+    # Initial state uncertainty.
+    initial_std_xy: 0.05
+    initial_std_yaw: 0.03

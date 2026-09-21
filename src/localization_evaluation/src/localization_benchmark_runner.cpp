@@ -15,9 +15,6 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "tf2/time.h"
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 
 
 class LocalizationBenchmarkRunner : public rclcpp::Node
@@ -44,29 +41,14 @@ public:
         // -------------------------------------------------
 
         waypoints_ = {
-            {3.39557,  -4.12722, 0.0},
-            {5.61326, 4.40286, 0.0},
+            {3.39557, -4.12722, 0.0},
+            {5.61326,  4.40286, 0.0},
             {7.68631, -1.58174, 0.0}
         };
 
 
         // -------------------------------------------------
-        // TF
-        // -------------------------------------------------
-
-        tf_buffer_ =
-            std::make_unique<tf2_ros::Buffer>(
-                this->get_clock()
-            );
-
-        tf_listener_ =
-            std::make_shared<tf2_ros::TransformListener>(
-                *tf_buffer_
-            );
-
-
-        // -------------------------------------------------
-        // Ground Truth / Wheel Odometry
+        // Ground Truth / Odom / ICP / EKF
         // -------------------------------------------------
 
         ground_truth_sub_ =
@@ -96,6 +78,34 @@ public:
             );
 
 
+        icp_pose_sub_ =
+            this->create_subscription<
+                geometry_msgs::msg::PoseStamped
+            >(
+                "/icp_pose",
+                10,
+                std::bind(
+                    &LocalizationBenchmarkRunner::icpPoseCallback,
+                    this,
+                    std::placeholders::_1
+                )
+            );
+
+
+        ekf_pose_sub_ =
+            this->create_subscription<
+                geometry_msgs::msg::PoseStamped
+            >(
+                "/ekf_pose",
+                20,
+                std::bind(
+                    &LocalizationBenchmarkRunner::ekfPoseCallback,
+                    this,
+                    std::placeholders::_1
+                )
+            );
+
+
         // -------------------------------------------------
         // Nav2 Action Client
         // -------------------------------------------------
@@ -119,7 +129,7 @@ public:
         // -------------------------------------------------
         //
         // ready_timer_:
-        //   Wait until Ground Truth, Odom and Nav2 are ready.
+        //   Wait until Ground Truth, Odom, ICP, EKF and Nav2 are ready.
         //
         // evaluation_timer_:
         //   Record localization error continuously during
@@ -145,11 +155,11 @@ public:
             );
 
 
-        // Debug status logs are intentionally disabled.
-        // RCLCPP_INFO(
-        //     this->get_logger(),
-        //     "Localization Benchmark Runner started"
-        // );
+        Debug status logs are intentionally disabled.
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Localization Benchmark Runner started"
+        );
 
         // RCLCPP_INFO(
         //     this->get_logger(),
@@ -184,12 +194,16 @@ private:
         Pose2D ground_truth;
         Pose2D odom;
         Pose2D icp;
+        Pose2D ekf;
 
         double odom_position_error;
         double odom_yaw_error;
 
         double icp_position_error;
         double icp_yaw_error;
+
+        double ekf_position_error;
+        double ekf_yaw_error;
     };
 
 
@@ -255,6 +269,24 @@ private:
     }
 
 
+    void icpPoseCallback(
+        const geometry_msgs::msg::PoseStamped::SharedPtr msg
+    )
+    {
+        latest_icp_pose_ = *msg;
+        icp_pose_received_ = true;
+    }
+
+
+    void ekfPoseCallback(
+        const geometry_msgs::msg::PoseStamped::SharedPtr msg
+    )
+    {
+        latest_ekf_pose_ = *msg;
+        ekf_pose_received_ = true;
+    }
+
+
     // =====================================================
     // Nav2 Lifecycle State
     // =====================================================
@@ -315,14 +347,19 @@ private:
         }
 
 
-        if (!ground_truth_received_ || !odom_received_)
+        if (
+            !ground_truth_received_ ||
+            !odom_received_ ||
+            !icp_pose_received_ ||
+            !ekf_pose_received_
+        )
         {
             // Debug status log disabled.
             // RCLCPP_INFO_THROTTLE(
             //     this->get_logger(),
             //     *this->get_clock(),
             //     2000,
-            //     "Waiting for Ground Truth and Odometry..."
+            //     "Waiting for Ground Truth, Odometry, ICP and EKF..."
             // );
 
             return;
@@ -584,11 +621,20 @@ private:
         EvaluationSample & sample
     )
     {
-        if (!ground_truth_received_ || !odom_received_)
+        if (
+            !ground_truth_received_ ||
+            !odom_received_ ||
+            !icp_pose_received_ ||
+            !ekf_pose_received_
+        )
         {
             return false;
         }
 
+
+        // -------------------------------------------------
+        // Ground Truth
+        // -------------------------------------------------
 
         sample.ground_truth.x =
             latest_ground_truth_.pose.position.x;
@@ -605,6 +651,10 @@ private:
             );
 
 
+        // -------------------------------------------------
+        // Wheel Odometry
+        // -------------------------------------------------
+
         sample.odom.x =
             latest_odom_.pose.pose.position.x;
 
@@ -620,43 +670,47 @@ private:
             );
 
 
-        try
-        {
-            const auto transform =
-                tf_buffer_->lookupTransform(
-                    "map",
-                    "base_footprint",
-                    tf2::TimePointZero
-                );
+        // -------------------------------------------------
+        // ICP-only pose
+        // -------------------------------------------------
 
+        sample.icp.x =
+            latest_icp_pose_.pose.position.x;
 
-            sample.icp.x =
-                transform.transform.translation.x;
+        sample.icp.y =
+            latest_icp_pose_.pose.position.y;
 
-            sample.icp.y =
-                transform.transform.translation.y;
-
-            sample.icp.yaw =
-                quaternionToYaw(
-                    transform.transform.rotation.x,
-                    transform.transform.rotation.y,
-                    transform.transform.rotation.z,
-                    transform.transform.rotation.w
-                );
-        }
-        catch (const tf2::TransformException & ex)
-        {
-            RCLCPP_WARN_THROTTLE(
-                this->get_logger(),
-                *this->get_clock(),
-                2000,
-                "TF unavailable: %s",
-                ex.what()
+        sample.icp.yaw =
+            quaternionToYaw(
+                latest_icp_pose_.pose.orientation.x,
+                latest_icp_pose_.pose.orientation.y,
+                latest_icp_pose_.pose.orientation.z,
+                latest_icp_pose_.pose.orientation.w
             );
 
-            return false;
-        }
 
+        // -------------------------------------------------
+        // ICP + EKF fused pose
+        // -------------------------------------------------
+
+        sample.ekf.x =
+            latest_ekf_pose_.pose.position.x;
+
+        sample.ekf.y =
+            latest_ekf_pose_.pose.position.y;
+
+        sample.ekf.yaw =
+            quaternionToYaw(
+                latest_ekf_pose_.pose.orientation.x,
+                latest_ekf_pose_.pose.orientation.y,
+                latest_ekf_pose_.pose.orientation.z,
+                latest_ekf_pose_.pose.orientation.w
+            );
+
+
+        // -------------------------------------------------
+        // Position / yaw errors against Ground Truth
+        // -------------------------------------------------
 
         sample.odom_position_error =
             std::hypot(
@@ -692,9 +746,25 @@ private:
             );
 
 
+        sample.ekf_position_error =
+            std::hypot(
+                sample.ekf.x -
+                    sample.ground_truth.x,
+                sample.ekf.y -
+                    sample.ground_truth.y
+            );
+
+        sample.ekf_yaw_error =
+            std::abs(
+                normalizeAngle(
+                    sample.ekf.yaw -
+                    sample.ground_truth.yaw
+                )
+            );
+
+
         return true;
     }
-
 
     void evaluate()
     {
@@ -729,6 +799,15 @@ private:
             sample.icp_yaw_error;
 
 
+        ekf_position_squared_sum_ +=
+            sample.ekf_position_error *
+            sample.ekf_position_error;
+
+        ekf_yaw_squared_sum_ +=
+            sample.ekf_yaw_error *
+            sample.ekf_yaw_error;
+
+
         if (
             sample.odom_position_error >
             odom_max_position_error_
@@ -746,6 +825,16 @@ private:
         {
             icp_max_position_error_ =
                 sample.icp_position_error;
+        }
+
+
+        if (
+            sample.ekf_position_error >
+            ekf_max_position_error_
+        )
+        {
+            ekf_max_position_error_ =
+                sample.ekf_position_error;
         }
 
 
@@ -810,6 +899,16 @@ private:
 
         RCLCPP_INFO(
             this->get_logger(),
+            "ICP + EKF    | x: %.4f | y: %.4f | yaw: %.4f | error: %.4f m / %.4f rad",
+            sample.ekf.x,
+            sample.ekf.y,
+            sample.ekf.yaw,
+            sample.ekf_position_error,
+            sample.ekf_yaw_error
+        );
+
+        RCLCPP_INFO(
+            this->get_logger(),
             "--------------------------------------------------"
         );
     }
@@ -867,6 +966,19 @@ private:
             );
 
 
+        const double ekf_position_rmse =
+            std::sqrt(
+                ekf_position_squared_sum_ /
+                count
+            );
+
+        const double ekf_yaw_rmse =
+            std::sqrt(
+                ekf_yaw_squared_sum_ /
+                count
+            );
+
+
         RCLCPP_INFO(
             this->get_logger(),
             "=================================================="
@@ -897,6 +1009,14 @@ private:
             icp_position_rmse,
             icp_yaw_rmse,
             icp_max_position_error_
+        );
+
+        RCLCPP_INFO(
+            this->get_logger(),
+            "EKF  | Position RMSE: %.4f m | Yaw RMSE: %.4f rad | Max Position Error: %.4f m",
+            ekf_position_rmse,
+            ekf_yaw_rmse,
+            ekf_max_position_error_
         );
 
         RCLCPP_INFO(
@@ -988,8 +1108,10 @@ private:
             << "gt_x,gt_y,gt_yaw,"
             << "odom_x,odom_y,odom_yaw,"
             << "icp_x,icp_y,icp_yaw,"
+            << "ekf_x,ekf_y,ekf_yaw,"
             << "odom_position_error,odom_yaw_error,"
-            << "icp_position_error,icp_yaw_error\n";
+            << "icp_position_error,icp_yaw_error,"
+            << "ekf_position_error,ekf_yaw_error\n";
 
 
         RCLCPP_INFO(
@@ -1031,11 +1153,18 @@ private:
             << sample.icp.y << ","
             << sample.icp.yaw << ","
 
+            << sample.ekf.x << ","
+            << sample.ekf.y << ","
+            << sample.ekf.yaw << ","
+
             << sample.odom_position_error << ","
             << sample.odom_yaw_error << ","
 
             << sample.icp_position_error << ","
-            << sample.icp_yaw_error
+            << sample.icp_yaw_error << ","
+
+            << sample.ekf_position_error << ","
+            << sample.ekf_yaw_error
             << "\n";
 
 
@@ -1066,8 +1195,12 @@ private:
         icp_position_squared_sum_ = 0.0;
         icp_yaw_squared_sum_ = 0.0;
 
+        ekf_position_squared_sum_ = 0.0;
+        ekf_yaw_squared_sum_ = 0.0;
+
         odom_max_position_error_ = 0.0;
         icp_max_position_error_ = 0.0;
+        ekf_max_position_error_ = 0.0;
 
         current_waypoint_number_ = 1;
     }
@@ -1086,9 +1219,17 @@ private:
     nav_msgs::msg::Odometry
         latest_odom_;
 
+    geometry_msgs::msg::PoseStamped
+        latest_icp_pose_;
+
+    geometry_msgs::msg::PoseStamped
+        latest_ekf_pose_;
+
 
     bool ground_truth_received_ = false;
     bool odom_received_ = false;
+    bool icp_pose_received_ = false;
+    bool ekf_pose_received_ = false;
 
     bool benchmark_started_ = false;
     bool benchmark_active_ = false;
@@ -1105,21 +1246,16 @@ private:
     double icp_position_squared_sum_ = 0.0;
     double icp_yaw_squared_sum_ = 0.0;
 
+    double ekf_position_squared_sum_ = 0.0;
+    double ekf_yaw_squared_sum_ = 0.0;
+
     double odom_max_position_error_ = 0.0;
     double icp_max_position_error_ = 0.0;
+    double ekf_max_position_error_ = 0.0;
 
 
     std::ofstream csv_file_;
     std::string csv_path_;
-
-
-    std::unique_ptr<
-        tf2_ros::Buffer
-    > tf_buffer_;
-
-    std::shared_ptr<
-        tf2_ros::TransformListener
-    > tf_listener_;
 
 
     rclcpp::Subscription<
@@ -1129,6 +1265,14 @@ private:
     rclcpp::Subscription<
         nav_msgs::msg::Odometry
     >::SharedPtr odom_sub_;
+
+    rclcpp::Subscription<
+        geometry_msgs::msg::PoseStamped
+    >::SharedPtr icp_pose_sub_;
+
+    rclcpp::Subscription<
+        geometry_msgs::msg::PoseStamped
+    >::SharedPtr ekf_pose_sub_;
 
 
     rclcpp_action::Client<
