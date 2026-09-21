@@ -726,7 +726,7 @@ When only Map Server is running, `map -> odom` is not published. Therefore, RViz
 
 ## Phase 9 — ICP Localization
 
-**Status: In Progress**
+**Status: Completed for the current ICP baseline benchmark**
 
 The custom 2D ICP localization package is implemented in C++ using the saved Occupancy Grid, current 2D LiDAR scan, odometry-frame TF, and an internally maintained `map -> odom` estimate.
 
@@ -1137,8 +1137,10 @@ robot spawn
 ROS-Gazebo bridge
 Nav2 Map Server
 Map Server lifecycle configure / activate
-temporary identity map -> odom TF
 icp_localization_node
+      |
+      v
+dynamic map -> odom TF
 ```
 
 Run:
@@ -1182,21 +1184,23 @@ The shared profile is used by:
 
 ![ICP Map-Frame Input Alignment](docs/images/13_icp_map_scan_alignment_rviz.png)
 
-### Current Limitation
+### Dynamic `map -> odom` TF and Moving-Robot Validation
 
-The calculated `map_to_odom_` correction is currently maintained and applied **inside the custom ICP node**.
-
-The real ROS2 dynamic TF:
+The custom ICP node now broadcasts the calculated correction as the real dynamic ROS2 TF:
 
 ```text
-map -> odom
+map
+ |
+ |  Custom ICP correction
+ v
+odom
+ |
+ |  Gazebo Differential Drive odometry
+ v
+base_footprint
 ```
 
-is not yet broadcast by the ICP node.
-
-Therefore, `localization_icp.launch.py` still starts a temporary identity `map -> odom` static transform to keep the ROS TF tree connected for RViz2 and current development validation.
-
-This temporary static transform must be removed when the custom ICP node begins broadcasting its calculated dynamic `map -> odom` transform.
+The temporary static identity `map -> odom` transform was removed. Translation and rotation tests confirmed that robot motion is represented primarily in `odom -> base_footprint`, while ICP continuously updates `map -> odom` as the map-relative odometry correction.
 
 ### Current ICP Status
 
@@ -1216,21 +1220,114 @@ This temporary static transform must be removed when the custom ICP node begins 
 [✓] Convergence condition
 [✓] Gazebo /clock -> ROS2 /clock bridge
 [✓] LaserScan timestamp-aligned TF lookup
-[✓] Single-command localization development launch
+[✓] Dynamic map -> odom TF broadcast
+[✓] Temporary static map -> odom removed
+[✓] Moving-robot translation / rotation validation
+[✓] Ground Truth evaluation pipeline
+[✓] Nav2 navigation-only integration
+[✓] Automated waypoint benchmark
+[✓] Odom vs ICP quantitative baseline
 
-[ ] Dynamic map -> odom TF broadcast from custom ICP
-[ ] Remove temporary static map -> odom publisher
-[ ] Moving-robot localization validation
-[ ] Quantitative ICP accuracy / runtime evaluation
+[ ] Repeated benchmark trials / mean and standard deviation
+[ ] Strict timestamp-aligned estimator comparison
+[ ] ICP runtime / CPU measurements
+[ ] EKF sensor fusion
 ```
 
-Next implementation steps:
+The next algorithm stage is EKF integration using Wheel Odometry, ICP, and IMU while preserving the same automated benchmark route for comparison.
 
-- Broadcast the calculated `map -> odom` transform from the custom ICP node
-- Remove the temporary static identity `map -> odom` publisher
-- Validate ICP convergence while the robot translates and rotates
-- Measure localization accuracy and processing time
-- Continue toward EKF integration
+---
+
+
+### Ground Truth and Automated Nav2 Benchmark
+
+A dedicated `localization_evaluation` package was added for simulation Ground Truth conversion, estimator comparison, and automated benchmark execution.
+
+The evaluation setup uses Nav2 only for navigation components such as planning, costmaps, obstacle avoidance, and control. AMCL is not used in this benchmark; the custom ICP node provides the localization correction through `map -> odom`.
+
+The fixed benchmark route is:
+
+```text
+START
+  |
+  v
+P1  (3.39557, -4.12722, yaw=0)
+  |
+  v
+P2  (5.61326,  4.40286, yaw=0)
+  |
+  v
+P3  (7.68631, -1.58174, yaw=0)
+```
+
+The route was selected to include longer travel, repeated turning, and obstacle-avoidance behavior so that accumulated odometry error and scan-to-map correction can be observed more clearly.
+
+The benchmark runner waits until Ground Truth, Odometry, `map -> base_footprint`, and the Nav2 `bt_navigator` ACTIVE lifecycle state are available before sending P1. Each next waypoint is sent only after the previous `NavigateToPose` action succeeds.
+
+```text
+Gazebo / Ground Truth
+          |
+          +-------------------------------+
+          |                               |
+          v                               v
+       /odom                       Custom ICP TF
+          |                         map -> odom
+          |                               |
+          +---------------+---------------+
+                          |
+                          v
+               localization_benchmark_runner
+                          |
+                          +---- START / P1 / P2 / P3 snapshots
+                          +---- continuous error samples
+                          +---- RMSE / max error
+                          +---- CSV result
+```
+
+### Nav2 + ICP Benchmark Visualization
+
+The Gazebo and RViz2 views are recorded together to show the physical navigation behavior and ROS2 localization / planning state in the same run.
+
+![Nav2 + ICP Gazebo / RViz Benchmark](docs/images/14_nav2_icp_gazebo_rviz_benchmark.gif)
+
+### Odom vs ICP Quantitative Result
+
+The checked-in reference run is stored under:
+
+```text
+results/benchmark_01/
+├── localization_benchmark.csv
+├── trajectory_comparison.png
+├── error_analysis.png
+└── README.md
+```
+
+Measured overall RMSE from this run:
+
+| Metric | Wheel Odometry | Custom ICP |
+|---|---:|---:|
+| Position RMSE | `0.1149 m` | `0.0428 m` |
+| Yaw RMSE | `0.0179 rad` | `0.0123 rad` |
+
+Custom ICP reduced the overall Position RMSE by approximately `62.7%` in this run.
+
+Segment-level Position RMSE:
+
+| Segment | Wheel Odometry | Custom ICP |
+|---|---:|---:|
+| START -> P1 | `0.0391 m` | `0.0351 m` |
+| P1 -> P2 | `0.1121 m` | `0.0321 m` |
+| P2 -> P3 | `0.1636 m` | `0.0604 m` |
+
+The measured data show increasing wheel-odometry position drift over the longer benchmark route, while scan-to-map ICP limits that growth by repeatedly correcting the map-relative pose estimate. ICP does not remove all error: residual scan-matching error remains and increases in parts of the route, which motivates the next EKF fusion stage.
+
+![Odom vs ICP Trajectory Comparison](results/benchmark_01/trajectory_comparison.png)
+
+![Odom vs ICP Error Analysis](results/benchmark_01/error_analysis.png)
+
+### Current Evaluation Limitations
+
+The current result is a single simulation run. Continuous samples use the latest available Ground Truth, Odometry, and composed ICP TF at the evaluation instant rather than a final strict timestamp-aligned offline comparison. Repeated trials, statistical variation, processing-time measurement, and stricter timestamp alignment remain future evaluation work.
 
 ---
 
@@ -1289,7 +1386,7 @@ All methods will use the same benchmark world, initial pose, map, and evaluation
 
 ## Phase 12 — Quantitative Localization Evaluation
 
-**Status: Planned**
+**Status: In Progress — Odom vs Custom ICP baseline completed**
 
 Compare each localization result against Gazebo ground truth.
 
@@ -1331,7 +1428,7 @@ The final evaluation will report quantitative targets, measured results, target 
 
 ## Phase 13 — Results and Documentation
 
-**Status: Planned**
+**Status: In Progress**
 
 Planned final result artifacts:
 
@@ -1439,11 +1536,11 @@ yaw:=1.5708
 ```text
 [████████████████████] AMR / Simulation
 [████████████████████] Sensors / Mapping
-[██████████████░░░░░░] ICP Localization
+[████████████████████] ICP Localization
 [░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
-[██░░░░░░░░░░░░░░░░░░] Evaluation Infrastructure
+[████████████████░░░░] Evaluation Infrastructure
 ```
 
 Current milestone:
 
-**AMR simulation, sensor integration, benchmark mapping, and saved-map validation are complete. The custom ICP pipeline now includes nearest-neighbor correspondence search, outlier rejection, centroid-based 2D rigid correction, iterative convergence, an internal `map_to_odom_` update, Gazebo `/clock` bridging, and LaserScan timestamp-aligned TF lookup. Next: broadcast the calculated dynamic `map -> odom` TF and remove the temporary static transform.**
+**Custom ICP localization now publishes the dynamic `map -> odom` TF and has been validated during translation and rotation. Ground Truth, Nav2 navigation-only integration, and an automated START -> P1 -> P2 -> P3 benchmark are complete. The first measured Odom vs ICP run reduced Position RMSE from `0.1149 m` to `0.0428 m`. Next: implement EKF fusion and repeat the same benchmark with Odom / ICP / ICP+EKF.**

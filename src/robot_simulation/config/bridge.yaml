@@ -39,3 +39,9 @@
   ros_type_name: "rosgraph_msgs/msg/Clock"
   gz_type_name: "ignition.msgs.Clock"
   direction: IGN_TO_ROS
+
+- ros_topic_name: "/ground_truth/poses"
+  gz_topic_name: "/world/localization_world/dynamic_pose/info"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "ignition.msgs.Pose_V"
+  direction: IGN_TO_ROS

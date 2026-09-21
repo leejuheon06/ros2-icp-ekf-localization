@@ -85,28 +85,6 @@ def generate_launch_description():
         )
     )
 
-    # TEMPORARY:
-    # 현재 icp_localization_node는 map_to_odom_을 내부적으로만 갱신하고
-    # 실제 TF broadcaster로 map -> odom을 아직 발행하지 않는다.
-    # 따라서 RViz / TF tree 검증을 위해 identity static TF를 유지한다.
-    # 이후 ICP node가 map -> odom을 직접 broadcast하게 되면 반드시 제거한다.
-    static_map_to_odom = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='temporary_map_to_odom_static_tf',
-        output='screen',
-        arguments=[
-            '--x', '0',
-            '--y', '0',
-            '--z', '0',
-            '--yaw', '0',
-            '--pitch', '0',
-            '--roll', '0',
-            '--frame-id', 'map',
-            '--child-frame-id', 'odom',
-        ]
-    )
-
     icp_localization = Node(
         package='icp_localization',
         executable='icp_localization_node',
@@ -152,6 +130,5 @@ def generate_launch_description():
         map_server,
         configure_map_server,
         activate_map_server,
-        static_map_to_odom,
         icp_localization,
     ])

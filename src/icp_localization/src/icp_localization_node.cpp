@@ -13,9 +13,12 @@
 
 #include "nav_msgs/msg/occupancy_grid.hpp"
 
+#include "geometry_msgs/msg/transform_stamped.hpp"
+
 #include "tf2/time.h"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
+#include "tf2_ros/transform_broadcaster.h"
 #include "tf2/exceptions.h"
 #include "tf2/utils.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
@@ -57,6 +60,11 @@ public:
         tf_listener_ =
             std::make_shared<tf2_ros::TransformListener>(
                 *tf_buffer_
+            );
+
+        tf_broadcaster_ =
+            std::make_unique<tf2_ros::TransformBroadcaster>(
+                *this
             );
 
         // LaserScan Subscriber
@@ -147,6 +155,85 @@ public:
 
 
 private:
+
+    void broadcastMapToOdom(
+        const rclcpp::Time& stamp)
+    {
+        geometry_msgs::msg::TransformStamped transform_msg;
+
+        // ICP가 계산한 pose는
+        // map 좌표계에서 odom 좌표계의 위치 / 방향을 의미한다.
+        transform_msg.header.stamp =
+            stamp;
+
+        transform_msg.header.frame_id =
+            "map";
+
+        transform_msg.child_frame_id =
+            "odom";
+
+
+        // -------------------------------------------------
+        // Translation
+        // -------------------------------------------------
+
+        transform_msg.transform.translation.x =
+            map_to_odom_.x;
+
+        transform_msg.transform.translation.y =
+            map_to_odom_.y;
+
+        transform_msg.transform.translation.z =
+            0.0;
+
+
+        // -------------------------------------------------
+        // 2D yaw -> quaternion
+        // -------------------------------------------------
+        //
+        // Roll = 0
+        // Pitch = 0
+        // Yaw = map_to_odom_.yaw
+        //
+        // 따라서 quaternion은 z / w 성분만 사용한다.
+        // -------------------------------------------------
+
+        const double half_yaw =
+            map_to_odom_.yaw * 0.5;
+
+        transform_msg.transform.rotation.x =
+            0.0;
+
+        transform_msg.transform.rotation.y =
+            0.0;
+
+        transform_msg.transform.rotation.z =
+            std::sin(
+                half_yaw
+            );
+
+        transform_msg.transform.rotation.w =
+            std::cos(
+                half_yaw
+            );
+
+
+        tf_broadcaster_->sendTransform(
+            transform_msg
+        );
+
+
+        // RCLCPP_INFO_THROTTLE(
+        //     this->get_logger(),
+        //     *this->get_clock(),
+        //     2000,
+        //     "Broadcast map -> odom TF | x: %.5f m | y: %.5f m | yaw: %.5f rad",
+        //     map_to_odom_.x,
+        //     map_to_odom_.y,
+        //     map_to_odom_.yaw
+        // );
+    }
+
 
     void mapCallback(
         const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
@@ -296,13 +383,13 @@ private:
     void scanCallback(
         const sensor_msgs::msg::LaserScan::SharedPtr msg)
     {
-        RCLCPP_INFO_THROTTLE(
-            this->get_logger(),
-            *this->get_clock(),
-            2000,
-            "Reference map points available in scanCallback: %zu",
-            map_points_.size()
-        );
+        // RCLCPP_INFO_THROTTLE(
+        //     this->get_logger(),
+        //     *this->get_clock(),
+        //     2000,
+        //     "Reference map points available in scanCallback: %zu",
+        //     map_points_.size()
+        // );
         
         std::vector<Point2D> points;
 
@@ -372,14 +459,14 @@ private:
             // lookupTransform()이 성공했다는 것은 tf_buffer_ 안에
             // scan_time에 대응되는 TF history가 존재한다는 의미다.
             // -------------------------------------------------
-            RCLCPP_INFO_THROTTLE(
-                this->get_logger(),
-                *this->get_clock(),
-                2000,
-                "Timestamp-synced TF | scan: %.3f sec | frame: %s -> odom",
-                scan_time.seconds(),
-                msg->header.frame_id.c_str()
-            );
+            // RCLCPP_INFO_THROTTLE(
+            //     this->get_logger(),
+            //     *this->get_clock(),
+            //     2000,
+            //     "Timestamp-synced TF | scan: %.3f sec | frame: %s -> odom",
+            //     scan_time.seconds(),
+            //     msg->header.frame_id.c_str()
+            // );
 
 
             // -------------------------------------------------
@@ -1060,6 +1147,21 @@ private:
                     iteration_pose;
 
 
+                // -------------------------------------------------
+                // Dynamic map -> odom TF broadcast
+                // -------------------------------------------------
+                //
+                // 현재 LaserScan의 timestamp를 그대로 사용해서
+                // 이번 ICP 결과에 대응되는 map -> odom TF를 발행한다.
+                //
+                // 이제 localization_icp.launch.py의 임시 static
+                // map -> odom publisher는 제거해야 한다.
+                // -------------------------------------------------
+                broadcastMapToOdom(
+                    scan_time
+                );
+
+
                 // RViz publish용 map_scan_points도 최종 pose로 갱신한다.
                 map_scan_points.clear();
 
@@ -1102,40 +1204,40 @@ private:
                 }
 
 
-                RCLCPP_INFO_THROTTLE(
-                    this->get_logger(),
-                    *this->get_clock(),
-                    2000,
-                    "ICP Iteration | iter: %d/%d | converged: %s | "
-                    "Raw: %zu | Valid: %zu | Rejected: %zu | "
-                    "Raw mean: %.5f m | mean: %.5f -> %.5f m | Raw max: %.5f m",
-                    performed_iterations,
-                    max_icp_iterations,
-                    converged ? "true" : "false",
-                    final_raw_count,
-                    final_valid_count,
-                    final_rejected_count,
-                    final_raw_mean_distance,
-                    final_valid_mean_distance,
-                    final_corrected_mean_distance,
-                    final_raw_max_distance
-                );
+                // RCLCPP_INFO_THROTTLE(
+                //     this->get_logger(),
+                //     *this->get_clock(),
+                //     2000,
+                //     "ICP Iteration | iter: %d/%d | converged: %s | "
+                //     "Raw: %zu | Valid: %zu | Rejected: %zu | "
+                //     "Raw mean: %.5f m | mean: %.5f -> %.5f m | Raw max: %.5f m",
+                //     performed_iterations,
+                //     max_icp_iterations,
+                //     converged ? "true" : "false",
+                //     final_raw_count,
+                //     final_valid_count,
+                //     final_rejected_count,
+                //     final_raw_mean_distance,
+                //     final_valid_mean_distance,
+                //     final_corrected_mean_distance,
+                //     final_raw_max_distance
+                // );
 
 
-                RCLCPP_INFO_THROTTLE(
-                    this->get_logger(),
-                    *this->get_clock(),
-                    2000,
-                    "Final Correction | "
-                    "dx: %.6f m | dy: %.6f m | dyaw: %.6f rad | "
-                    "map_to_odom: (%.5f, %.5f, %.5f)",
-                    final_delta_x,
-                    final_delta_y,
-                    final_delta_yaw,
-                    map_to_odom_.x,
-                    map_to_odom_.y,
-                    map_to_odom_.yaw
-                );
+                // RCLCPP_INFO_THROTTLE(
+                //     this->get_logger(),
+                //     *this->get_clock(),
+                //     2000,
+                //     "Final Correction | "
+                //     "dx: %.6f m | dy: %.6f m | dyaw: %.6f rad | "
+                //     "map_to_odom: (%.5f, %.5f, %.5f)",
+                //     final_delta_x,
+                //     final_delta_y,
+                //     final_delta_yaw,
+                //     map_to_odom_.x,
+                //     map_to_odom_.y,
+                //     map_to_odom_.yaw
+                // );
             }
 
 
@@ -1242,13 +1344,13 @@ private:
             );
 
 
-            RCLCPP_INFO_THROTTLE(
-                this->get_logger(),
-                *this->get_clock(),
-                2000,
-                "Transformed %zu scan points from odom to map",
-                map_scan_points.size()
-            );
+            // RCLCPP_INFO_THROTTLE(
+            //     this->get_logger(),
+            //     *this->get_clock(),
+            //     2000,
+            //     "Transformed %zu scan points from odom to map",
+            //     map_scan_points.size()
+            // );
 
 
             // -------------------------------------------------
@@ -1340,14 +1442,14 @@ private:
             );
 
 
-            RCLCPP_INFO_THROTTLE(
-                this->get_logger(),
-                *this->get_clock(),
-                2000,
-                "Transformed %zu scan points from %s to odom",
-                odom_points.size(),
-                msg->header.frame_id.c_str()
-            );
+            // RCLCPP_INFO_THROTTLE(
+            //     this->get_logger(),
+            //     *this->get_clock(),
+            //     2000,
+            //     "Transformed %zu scan points from %s to odom",
+            //     odom_points.size(),
+            //     msg->header.frame_id.c_str()
+            // );
         }
         catch (
             const tf2::TransformException& ex
@@ -1492,6 +1594,10 @@ private:
     std::shared_ptr<
         tf2_ros::TransformListener
     > tf_listener_;
+
+    std::unique_ptr<
+        tf2_ros::TransformBroadcaster
+    > tf_broadcaster_;
 
     // ROS2 Subscriber
     rclcpp::Subscription<

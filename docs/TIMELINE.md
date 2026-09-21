@@ -365,3 +365,99 @@
 - Remove the temporary static identity `map -> odom` publisher from `localization_icp.launch.py`
 - Validate localization while the robot translates and rotates
 - Begin ICP quantitative accuracy and runtime measurements
+
+## 2026-09-21
+
+### Dynamic `map -> odom` TF Broadcast
+- Added `tf2_ros::TransformBroadcaster` to the custom ICP localization node
+- Published the current ICP correction as the dynamic `map -> odom` transform
+- Used the current LaserScan timestamp for the transform stamp
+- Removed the temporary static identity `map -> odom` publisher from the localization launch
+- Verified `map -> odom` updates at approximately the LiDAR / ICP update rate
+- Verified the complete `map -> odom -> base_footprint` TF chain
+
+### Moving-Robot ICP Validation
+- Validated straight-line motion while Custom ICP continuously updated the map-relative correction
+- Validated rotation while robot yaw changed in `odom -> base_footprint` and `map -> odom` remained a small correction
+- Confirmed that `map -> base_footprint` represents the final map-relative robot pose
+
+### Gazebo Ground Truth Integration
+- Bridged `/world/localization_world/dynamic_pose/info` into ROS2 as `/ground_truth/poses`
+- Added the `localization_evaluation` package
+- Added `ground_truth_node` to extract the AMR pose and convert Gazebo world coordinates into the fixed benchmark start-relative coordinate system
+- Published the evaluation reference as `/ground_truth_pose`
+- Verified the benchmark start becomes approximately `(0, 0, 0)`
+
+### Odom / ICP Evaluation Infrastructure
+- Added `localization_evaluation_node`
+- Compared Ground Truth against Wheel Odometry and the composed Custom ICP `map -> base_footprint` pose
+- Added instantaneous position / yaw error and cumulative RMSE calculations
+- Identified that short straight motion in the original Gazebo setup did not expose enough odometry drift for a meaningful benchmark
+
+### Nav2 Navigation-Only Integration
+- Added `nav2_icp_params.yaml`
+- Added `navigation_icp.launch.py`
+- Used Nav2 for global planning, local control, costmaps, obstacle avoidance, waypoint execution, and velocity smoothing
+- Did not use AMCL in this benchmark; Custom ICP provides `map -> odom`
+- Configured Global Costmap in `map` and rolling Local Costmap in `odom`
+- Fixed a ROS2 Humble parameter-type error by changing Local Costmap `width` / `height` from `3.0` to integer `3`
+- Verified all Nav2 managed nodes reach the ACTIVE lifecycle state
+- Verified manual `NavigateToPose` navigation to a test point
+
+### Automated Waypoint Benchmark
+- Added `localization_benchmark_runner`
+- Added `benchmark_icp.launch.py` to start simulation, Custom ICP, Map Server, Nav2, Ground Truth, and benchmark execution together
+- Added Nav2 lifecycle-state gating so the first waypoint is not sent before `bt_navigator` becomes ACTIVE
+- Disabled temporary readiness/debug logs after the startup sequence was validated
+- Configured the final benchmark route:
+  - `P1 = (3.39557, -4.12722, 0.0)`
+  - `P2 = (5.61326, 4.40286, 0.0)`
+  - `P3 = (7.68631, -1.58174, 0.0)`
+- Selected the route to make turning, longer travel, and obstacle avoidance visible
+- Recorded continuous Ground Truth / Odom / ICP samples and waypoint snapshots into CSV
+- Finished measurement automatically after P3 succeeds
+
+### First Odom vs ICP Benchmark Result
+- Recorded one complete START -> P1 -> P2 -> P3 simulation run
+- Overall Wheel Odometry Position RMSE: `0.1149 m`
+- Overall Custom ICP Position RMSE: `0.0428 m`
+- Overall Wheel Odometry Yaw RMSE: `0.0179 rad`
+- Overall Custom ICP Yaw RMSE: `0.0123 rad`
+- Observed approximately `62.7%` lower overall Position RMSE with Custom ICP in this run
+- Segment Position RMSE:
+  - START -> P1: Odom `0.0391 m`, ICP `0.0351 m`
+  - P1 -> P2: Odom `0.1121 m`, ICP `0.0321 m`
+  - P2 -> P3: Odom `0.1636 m`, ICP `0.0604 m`
+- Observed increasing Wheel Odometry position drift along the longer route while scan-to-map ICP limited the growth of the map-relative position error
+- Confirmed that ICP still retains residual error and does not force localization error to zero
+
+### Benchmark Artifacts
+- Added combined Gazebo + RViz2 benchmark visualization as `docs/images/14_nav2_icp_gazebo_rviz_benchmark.gif`
+- Added checked-in representative CSV as `results/benchmark_01/localization_benchmark.csv`
+- Added `results/benchmark_01/trajectory_comparison.png`
+- Added `results/benchmark_01/error_analysis.png`
+- Kept quantitative benchmark outputs separate from `docs/images/`
+
+### Current Evaluation Limitations
+- Current quantitative values are from a single simulation run
+- Continuous evaluator samples currently compare the latest available Ground Truth, Odometry, and ICP-composed TF values rather than a final offline strict timestamp alignment
+- Repeated trials and statistical summary are not yet complete
+- ICP processing time / CPU usage are not yet included in the benchmark
+
+### Current Milestone
+- Dynamic Custom ICP TF: Completed
+- Moving-Robot ICP Validation: Completed
+- Gazebo Ground Truth: Completed
+- Nav2 Navigation-Only Integration: Completed
+- Automated Waypoint Benchmark: Completed
+- Odom vs ICP Quantitative Baseline: Completed
+- Result CSV / Trajectory / Error Graphs: Completed
+- EKF Sensor Fusion: Next
+
+### Next Step
+- Implement the EKF state / prediction model in C++
+- Fuse Wheel Odometry, Custom ICP, and IMU
+- Add ICP+EKF as a third estimator to the same automated benchmark
+- Repeat benchmark runs and calculate mean / standard deviation
+- Add strict timestamp-aligned evaluation and runtime / CPU measurements
+
