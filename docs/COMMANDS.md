@@ -575,6 +575,84 @@ source install/setup.bash
 
 ------------------------------------------------------------------------
 
+# 25. Git 상태 확인
+
+프로젝트 루트로 이동합니다.
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+```
+
+변경된 파일을 확인합니다.
+
+``` bash
+git status
+```
+
+변경 내용을 확인합니다.
+
+``` bash
+git diff
+```
+
+------------------------------------------------------------------------
+
+# 26. Git Staging
+
+이번 단계에서 변경한 파일을 명시적으로 추가하는 방식을 권장합니다.
+
+예:
+
+``` bash
+git add src/robot_description
+git add src/robot_simulation
+git add README.md
+git add docs/
+```
+
+Staging된 내용을 확인합니다.
+
+``` bash
+git status
+```
+
+실제로 commit될 변경사항을 확인합니다.
+
+``` bash
+git diff --cached
+```
+
+------------------------------------------------------------------------
+
+# 27. 현재 단계 Git Commit
+
+현재까지의 AMR URDF + Gazebo Simulation 작업을 하나의 milestone으로
+commit한다면:
+
+``` bash
+git commit -m "feat: add AMR URDF and Gazebo simulation"
+```
+
+commit history 확인:
+
+``` bash
+git log --oneline
+```
+
+GitHub로 push:
+
+``` bash
+git push
+```
+
+최초 push에서 upstream이 설정되지 않았다면:
+
+``` bash
+git push -u origin main
+```
+
+------------------------------------------------------------------------
+
 # 28. 현재 프로젝트 진행 상태
 
 ``` text
@@ -641,6 +719,7 @@ AMR Motion
 7.  RViz에서 TF/Odometry 확인
 8.  실행 결과 이미지 및 GIF 저장
 9.  README/TIMELINE 업데이트
+10. Git commit 및 push
 
 
 ------------------------------------------------------------------------
@@ -794,6 +873,48 @@ ROS2 /odom
 
 ------------------------------------------------------------------------
 
+# 35. Git Commit
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+
+git diff
+```
+
+변경 파일을 staging 합니다.
+
+``` bash
+git add src/robot_description/urdf/amr.urdf.xacro
+git add README.md
+git add COMMANDS.md
+git add TIMELINE.md
+```
+
+Staging 결과를 확인합니다.
+
+``` bash
+git status
+
+git diff --cached
+```
+
+Commit:
+
+``` bash
+git commit -m "feat: add differential drive and validate robot motion"
+```
+
+Push:
+
+``` bash
+git push origin main
+```
+
+
+------------------------------------------------------------------------
+
 # 36. ROS2 ↔ Gazebo Bridge 자동 실행
 
 `simulation.launch.py`에 `ros_gz_bridge`를 추가하여 Gazebo simulation과 함께
@@ -939,6 +1060,56 @@ Gazebo Odometry
 ros_gz_bridge
     ↓
 ROS2 /odom
+```
+
+------------------------------------------------------------------------
+
+# 41. Bridge 단계 Git Commit
+
+변경 사항 확인:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+
+git diff
+```
+
+이번 단계에서 수정한 파일을 staging 합니다.
+
+``` bash
+git add src/robot_simulation/launch/simulation.launch.py
+git add src/robot_simulation/config/
+git add README.md
+git add docs/COMMANDS.md
+git add docs/TIMELINE.md
+```
+
+Bridge 동작 확인 이미지 또는 GIF를 추가했다면:
+
+``` bash
+git add docs/images/
+```
+
+Commit 전 확인:
+
+``` bash
+git status
+
+git diff --cached
+```
+
+권장 commit:
+
+``` bash
+git commit -m "feat: integrate ROS2 Gazebo bridge for cmd_vel and odometry"
+```
+
+Push:
+
+``` bash
+git push origin main
 ```
 
 ------------------------------------------------------------------------
@@ -2424,6 +2595,57 @@ tf2::TimePointZero
 
 ------------------------------------------------------------------------
 
+# 88. 현재 단계 Git Commit
+
+먼저 검증 이미지를 다음 이름으로 저장합니다.
+
+``` text
+docs/images/13_icp_map_scan_alignment_rviz.png
+```
+
+변경 내용 확인:
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+git diff
+```
+
+이번 단계의 파일을 명시적으로 staging 합니다.
+
+``` bash
+git add src/icp_localization/src/icp_localization_node.cpp
+git add src/icp_localization/CMakeLists.txt
+git add src/icp_localization/package.xml
+git add docs/images/12_laserscan_odom_transform_rviz.gif
+git add docs/images/13_icp_map_scan_alignment_rviz.png
+git add README.md
+git add docs/COMMANDS.md
+git add docs/TIMELINE.md
+```
+
+Commit 전 확인:
+
+``` bash
+git status
+git diff --cached
+```
+
+권장 commit:
+
+``` bash
+git commit -m "feat: prepare map-frame point clouds for ICP matching"
+```
+
+Push:
+
+``` bash
+git push origin main
+```
+
+------------------------------------------------------------------------
+
 # 89. 다음 단계
 
 다음 개발 단계는 **Nearest-Neighbor Correspondence Search**입니다.
@@ -2862,7 +3084,62 @@ frame: laser_link -> odom
 
 ------------------------------------------------------------------------
 
-# 101. 다음 단계
+# 101. 2026-09-20 Git Checkpoint
+
+먼저 변경 파일을 확인합니다.
+
+``` bash
+cd ~/ros2_icp_ekf_localization
+
+git status
+git diff
+```
+
+이번 단계 관련 파일을 명시적으로 staging 합니다.
+
+``` bash
+git add src/icp_localization/src/icp_localization_node.cpp
+git add src/robot_simulation/launch/localization_icp.launch.py
+git add src/robot_simulation/config/bridge.yaml
+git add README.md
+git add docs/COMMANDS.md
+git add docs/TIMELINE.md
+```
+
+Commit 전 확인:
+
+``` bash
+git status
+git diff --cached
+```
+
+권장 commit:
+
+``` bash
+git commit -m "feat: implement iterative ICP correction with timestamp sync"
+```
+
+Push:
+
+``` bash
+git push origin main
+```
+
+Push 후:
+
+``` bash
+git status
+```
+
+정상 기준:
+
+``` text
+nothing to commit, working tree clean
+```
+
+------------------------------------------------------------------------
+
+# 102. 다음 단계
 
 다음 개발 단계는 custom ICP node가 내부적으로 계산 중인 `map_to_odom_` 값을 실제 ROS2 TF로 발행하는 것입니다.
 
@@ -2877,37 +3154,29 @@ ROS2 TF Tree
 ```
 
 완료 후 `localization_icp.launch.py`의 임시 static `map -> odom` publisher를 제거하고 이동 중 localization을 검증합니다.
-
 ------------------------------------------------------------------------
 
-# 102. Dynamic `map -> odom` TF 확인
+# 103. Dynamic map -> odom TF 확인
 
-Custom ICP가 계산한 보정값을 실제 ROS2 TF로 발행하는지 확인합니다.
+Custom ICP localization을 실행합니다.
+
+``` bash
+ros2 launch robot_simulation localization_icp.launch.py
+```
+
+TF가 연결되는지 확인합니다.
 
 ``` bash
 ros2 run tf2_ros tf2_echo map odom
 ```
 
-정상 기준:
-
-``` text
-map -> odom
-약 10 Hz 수준으로 갱신
-```
-
-최종 robot pose 확인:
-
-``` bash
-ros2 run tf2_ros tf2_echo map base_footprint
-```
-
-TF tree 확인:
+전체 TF tree를 생성하려면:
 
 ``` bash
 ros2 run tf2_tools view_frames
 ```
 
-현재 핵심 TF 구조:
+정상 구조:
 
 ``` text
 map
@@ -2921,61 +3190,112 @@ base_footprint
 
 ------------------------------------------------------------------------
 
-# 103. Ground Truth Bridge 및 평가 노드 확인
+# 104. ICP Pose 확인
 
-Gazebo Ground Truth bridge topic 확인:
-
-``` bash
-ros2 topic info /ground_truth/poses
-```
-
-Ground Truth 변환 결과 확인:
+Custom ICP가 robot pose를 `map` frame에서 발행하는지 확인합니다.
 
 ``` bash
-ros2 topic echo /ground_truth_pose --once
+ros2 topic echo /icp_pose --once
 ```
 
-시작 위치에서는 benchmark 기준 좌표가 다음과 비슷해야 합니다.
+Topic 정보:
+
+``` bash
+ros2 topic info /icp_pose
+```
+
+주기 확인:
+
+``` bash
+ros2 topic hz /icp_pose
+```
+
+정상 기준:
 
 ``` text
-x: 0.0
-y: 0.0
-yaw: 0.0
+header.frame_id: map
 ```
 
-평가 패키지 executable 확인:
+------------------------------------------------------------------------
+
+# 105. EKF Localization 빌드 및 실행
+
+최종 localization 관련 패키지를 빌드합니다.
 
 ``` bash
-ros2 pkg executables localization_evaluation
+cd ~/ros2_icp_ekf_localization
+
+colcon build \
+  --symlink-install \
+  --packages-select \
+  icp_localization \
+  ekf_localization \
+  localization_evaluation \
+  robot_simulation
+
+source install/setup.bash
+```
+
+EKF만 실행할 때:
+
+``` bash
+ros2 launch ekf_localization ekf_localization.launch.py
+```
+
+EKF output topic 확인:
+
+``` bash
+ros2 topic list | grep ekf
 ```
 
 확인 대상:
 
 ``` text
-ground_truth_node
-localization_evaluation_node
-localization_benchmark_runner
+/ekf_pose
+/ekf_odom
 ```
 
 ------------------------------------------------------------------------
 
-# 104. Nav2 + Custom ICP Navigation 실행
+# 106. EKF Pose / Frequency 확인
 
-Nav2는 planning / costmap / obstacle avoidance / control에 사용하고, localization은 Custom ICP의 `map -> odom`을 사용합니다.
+EKF fused pose 1회 확인:
 
 ``` bash
-cd ~/ros2_icp_ekf_localization
-source /opt/ros/humble/setup.bash
-source install/setup.bash
+ros2 topic echo /ekf_pose --once
+```
 
+Frame 확인:
+
+``` bash
+ros2 topic echo /ekf_pose --once | grep frame_id
+```
+
+주기 확인:
+
+``` bash
+ros2 topic hz /ekf_pose
+```
+
+Odometry output 확인:
+
+``` bash
+ros2 topic echo /ekf_odom --once
+```
+
+------------------------------------------------------------------------
+
+# 107. Nav2 + Custom ICP 실행
+
+Nav2 planning / control과 custom ICP localization을 함께 실행합니다.
+
+``` bash
 ros2 launch robot_simulation navigation_icp.launch.py
 ```
 
-Nav2 lifecycle 확인:
+Lifecycle 상태 확인:
 
 ``` bash
-ros2 lifecycle get /controller_server
-ros2 lifecycle get /planner_server
 ros2 lifecycle get /bt_navigator
 ```
 
@@ -2985,183 +3305,204 @@ ros2 lifecycle get /bt_navigator
 active [3]
 ```
 
-NavigateToPose Action Server 확인:
+NavigateToPose action 확인:
 
 ``` bash
-ros2 action info /navigate_to_pose
+ros2 action list | grep navigate_to_pose
 ```
 
 정상 기준:
 
 ``` text
-Action servers: 1
+/navigate_to_pose
 ```
 
 ------------------------------------------------------------------------
 
-# 105. 자동 Localization Benchmark 실행
+# 108. Automated Odom / ICP / EKF Benchmark 실행
 
-현재 고정 waypoint:
-
-``` text
-P1 = (3.39557, -4.12722, yaw=0)
-P2 = (5.61326,  4.40286, yaw=0)
-P3 = (7.68631, -1.58174, yaw=0)
-```
-
-전체 benchmark를 한 번에 실행합니다.
+최종 benchmark는 별도로 EKF를 먼저 실행하지 않고 아래 launch 하나만 실행합니다.
 
 ``` bash
 cd ~/ros2_icp_ekf_localization
+
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
 ros2 launch robot_simulation benchmark_icp.launch.py
 ```
 
-Benchmark Runner는 다음 준비 상태를 확인한 뒤 자동으로 시작합니다.
+현재 launch 시작 순서:
 
 ``` text
-Ground Truth available
-Odom available
-bt_navigator ACTIVE
-NavigateToPose Action Server ready
-map -> base_footprint TF available
+0 s   Navigation / Gazebo / ICP
+10 s  EKF
+12 s  Ground Truth
+15 s  Benchmark Runner
 ```
 
-실행 순서:
+Benchmark runner는 `bt_navigator` ACTIVE 상태를 추가로 확인한 뒤 P1을 전송합니다.
+
+고정 waypoint:
 
 ``` text
-START
-  ↓
-P1
-  ↓
-P2
-  ↓
-P3
-  ↓
-BENCHMARK COMPLETE
+P1 = (3.39557, -4.12722, 0.0)
+P2 = (5.61326,  4.40286, 0.0)
+P3 = (7.68631, -1.58174, 0.0)
 ```
 
 ------------------------------------------------------------------------
 
-# 106. Benchmark CSV 확인
+# 109. Benchmark 입력 Topic 확인
 
-자동 생성된 결과 파일 확인:
+Benchmark가 시작하지 않을 때 먼저 네 estimator 입력이 존재하는지 확인합니다.
 
 ``` bash
-ls -lh ~/ros2_icp_ekf_localization/results/
+ros2 topic list | grep -E "ground_truth_pose|/odom$|icp_pose|ekf_pose"
 ```
 
-최근 CSV 확인:
+개별 message 확인:
 
 ``` bash
-ls -t ~/ros2_icp_ekf_localization/results/*.csv | head -n 1
+ros2 topic echo /ground_truth_pose --once
+ros2 topic echo /odom --once
+ros2 topic echo /icp_pose --once
+ros2 topic echo /ekf_pose --once
+```
+
+Frequency 확인:
+
+``` bash
+ros2 topic hz /ground_truth_pose
+ros2 topic hz /odom
+ros2 topic hz /icp_pose
+ros2 topic hz /ekf_pose
+```
+
+------------------------------------------------------------------------
+
+# 110. Benchmark 시작하지 않을 때 Nav2 Lifecycle 확인
+
+``` bash
+ros2 lifecycle get /bt_navigator
+```
+
+`active [3]`가 아니라면 Nav2 lifecycle startup 로그를 확인합니다.
+
+주요 node 확인:
+
+``` bash
+ros2 node list | grep -E "planner_server|controller_server|bt_navigator|smoother_server|lifecycle_manager"
+```
+
+NavigateToPose action server 확인:
+
+``` bash
+ros2 action info /navigate_to_pose
+```
+
+------------------------------------------------------------------------
+
+# 111. Benchmark CSV 생성 확인
+
+최근 생성된 benchmark CSV를 확인합니다.
+
+``` bash
+ls -lt ~/ros2_icp_ekf_localization/results/*.csv 2>/dev/null
+```
+
+결과 파일을 `results/benchmark_02/`에 보관한 후:
+
+``` bash
+ls -lh ~/ros2_icp_ekf_localization/results/benchmark_02/
 ```
 
 CSV header 확인:
 
 ``` bash
-head -n 1 ~/ros2_icp_ekf_localization/results/localization_benchmark_*.csv
+head -n 1 \
+~/ros2_icp_ekf_localization/results/benchmark_02/localization_benchmark_1.csv
 ```
 
-주요 event 확인:
-
-``` bash
-grep -E ',START,|,P1,|,P2,|,P3,' \
-~/ros2_icp_ekf_localization/results/localization_benchmark_*.csv
-```
-
-기록 항목:
+확인 대상 column:
 
 ``` text
-sim_time / event / waypoint
-Ground Truth x y yaw
-Odom x y yaw
-ICP x y yaw
-Odom position / yaw error
-ICP position / yaw error
+gt_x,gt_y,gt_yaw
+odom_x,odom_y,odom_yaw
+icp_x,icp_y,icp_yaw
+ekf_x,ekf_y,ekf_yaw
+odom_position_error,odom_yaw_error
+icp_position_error,icp_yaw_error
+ekf_position_error,ekf_yaw_error
 ```
 
 ------------------------------------------------------------------------
 
-# 107. Global / Local Costmap 확인
+# 112. START / P1 / P2 / P3 Event 확인
 
-Global Costmap 발행 주기 확인:
-
-``` bash
-ros2 topic hz /global_costmap/costmap
-```
-
-Local Costmap 발행 주기 확인:
+CSV의 event row를 확인합니다.
 
 ``` bash
-ros2 topic hz /local_costmap/costmap
+grep -E ",START,|,P1,|,P2,|,P3," \
+~/ros2_icp_ekf_localization/results/benchmark_02/localization_benchmark_1.csv
 ```
 
-현재 Local Costmap 설정의 대표값:
-
-``` text
-rolling_window: true
-width: 3
-height: 3
-resolution: 0.05 m
-```
-
-RViz2에서는 `/global_costmap/costmap`과 `/local_costmap/costmap`을 별도 Map Display로 추가하여 확인할 수 있습니다.
+연속 정량 분석에는 `SAMPLE` row를 사용하고,
+START / P1 / P2 / P3 row는 waypoint 도달 시점 표시용으로 사용합니다.
 
 ------------------------------------------------------------------------
 
-# 108. RViz2 Map GLSL 렌더링 오류 진단
+# 113. 최종 결과 파일 확인
 
-다음 메시지는 RViz2 MapDisplay의 OpenGL / GLSL 렌더링 계층에서 발생할 수 있습니다.
+``` bash
+cd ~/ros2_icp_ekf_localization/results/benchmark_02
+
+tree
+```
+
+최종 보관 결과:
 
 ``` text
-active samplers with a different type refer to the same texture image unit
+benchmark_02/
+├── 4run_mean_position_rmse.png
+├── 4run_mean_yaw_rmse.png
+├── error_analysis.png
+├── localization_benchmark_1.csv
+├── localization_benchmark_2.csv
+├── localization_benchmark_3.csv
+├── localization_benchmark_4.csv
+├── position_error_time.png
+├── position_rmse_comparison.png
+├── segment_position_rmse.png
+├── segment_yaw_rmse.png
+├── trajectory_comparison.png
+├── yaw_error_time.png
+└── yaw_rmse_comparison.png
 ```
-
-XCB 실행 확인:
-
-``` bash
-QT_QPA_PLATFORM=xcb rviz2
-```
-
-Software rendering 확인:
-
-``` bash
-LIBGL_ALWAYS_SOFTWARE=1 rviz2
-```
-
-OpenGL renderer 확인:
-
-``` bash
-glxinfo | grep -E "OpenGL vendor|OpenGL renderer|OpenGL version"
-```
-
-Map / RobotModel / LaserScan / Nav2 visualization이 정상이라면 localization 계산 자체와는 별개의 RViz2 렌더링 문제로 구분합니다.
 
 ------------------------------------------------------------------------
 
-# 109. 현재 Localization Benchmark 진행 상태
+# 114. 최종 검증 상태
 
 ``` text
-[✓] Dynamic map -> odom TF
-[✓] Moving ICP validation
-[✓] Gazebo Ground Truth bridge
-[✓] Ground Truth relative pose node
-[✓] Odom / ICP evaluation node
-[✓] Nav2 navigation-only integration
-[✓] Global / Local Costmap
-[✓] NavigateToPose waypoint navigation
-[✓] Automated START -> P1 -> P2 -> P3 benchmark
-[✓] CSV result recording
-[✓] Odom vs ICP Position / Yaw RMSE
-[✓] Trajectory / error result graphs
-
-[ ] Repeated benchmark trials
-[ ] Strict timestamp-aligned comparison
-[ ] ICP processing-time / CPU measurement
-[ ] EKF Sensor Fusion
-[ ] ICP + EKF benchmark comparison
+[✓] Gazebo AMR Simulation
+[✓] Differential Drive
+[✓] ROS2 <-> Gazebo Bridge
+[✓] /odom
+[✓] /scan
+[✓] /imu
+[✓] Saved Occupancy Map
+[✓] Custom ICP Scan Matching
+[✓] Dynamic map -> odom
+[✓] /icp_pose
+[✓] Custom EKF Prediction
+[✓] Custom EKF ICP Measurement Update
+[✓] /ekf_pose
+[✓] /ekf_odom
+[✓] Nav2 Navigation with Custom ICP
+[✓] Gazebo Ground Truth
+[✓] Automated START -> P1 -> P2 -> P3 Benchmark
+[✓] Odom / ICP / ICP+EKF CSV Logging
+[✓] Four Repeated Benchmark Runs
+[✓] Position / Yaw RMSE Analysis
 ```
-

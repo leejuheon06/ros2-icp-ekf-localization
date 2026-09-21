@@ -14,15 +14,15 @@ This project develops an AMR localization system using:
 - ICP Scan Matching
 - Extended Kalman Filter (EKF)
 
-The final localization pipeline will estimate the robot pose:
+The implemented localization pipeline estimates the robot pose:
 
 ```text
 [x, y, yaw]
 ```
 
-by combining LiDAR-based global localization with wheel odometry and IMU measurements.
+by combining LiDAR-based scan-to-map localization with wheel odometry and IMU measurements.
 
-The project is developed and tested in a Gazebo simulation environment before evaluating localization accuracy against simulation ground truth.
+The complete benchmark is executed in Gazebo Fortress and evaluated against simulation ground truth using the same automated START -> P1 -> P2 -> P3 route over four repeated runs.
 
 ---
 
@@ -43,45 +43,68 @@ The project is developed and tested in a Gazebo simulation environment before ev
 ## 3. System Architecture
 
 ```text
-                    Saved Occupancy Map
-                            |
-                            v
-2D LiDAR ---------> ICP Localization
-                            |
-                            v
-                        ICP Pose
-                            |
-                            |
-Wheel Odometry ------------+
-                            |
-IMU ------------------------+
-                            |
-                            v
-                           EKF
-                            |
-                            v
-                  Estimated Robot Pose
-                     [x, y, yaw]
+                         Saved Occupancy Map
+                                  |
+                                  v
+2D LiDAR /scan ------------> Custom ICP
+                                  |
+                                  +---- dynamic map -> odom TF
+                                  |
+                                  +---- /icp_pose
+                                          |
+                                          v
+Wheel Odometry /odom -------> EKF Prediction / Update
+IMU /imu -------------------->        |
+                                          v
+                                      /ekf_pose
+                                      /ekf_odom
 ```
 
-The system will eventually provide the TF relationship:
+The current validated benchmark architecture uses the custom ICP node as the `map -> odom` TF authority so that Nav2 can navigate with the custom localization correction, while the EKF runs in parallel and publishes the fused pose for quantitative comparison.
 
 ```text
 map
  |
+ |  Custom ICP correction
  v
 odom
  |
+ |  Wheel odometry
  v
-base_link
+base_footprint
  |
- +---- laser_link
- |
- +---- imu_link
- |
- +---- left_wheel_link
- |
- +---- right_wheel_link
+ +---- base_link
+       |
+       +---- laser_link
+       |
+       +---- imu_link
+       |
+       +---- left_wheel_link
+       |
+       +---- right_wheel_link
+```
+
+For evaluation:
+
+```text
+Gazebo Ground Truth
+        |
+        +-------------------+
+        |                   |
+        v                   v
+      /odom              /icp_pose
+        |                   |
+        +---------+---------+
+                  |
+               /ekf_pose
+                  |
+                  v
+      localization_benchmark_runner
+                  |
+                  +---- continuous SAMPLE rows
+                  +---- START / P1 / P2 / P3 event rows
+                  +---- Position / Yaw error
+                  +---- CSV output
 ```
 
 ---
@@ -124,7 +147,6 @@ The drive wheels use relatively high friction for traction, while the passive ca
 ros2_icp_ekf_localization/
 │
 ├── src/
-│   │
 │   ├── robot_description/
 │   │   ├── launch/
 │   │   │   └── display.launch.py
@@ -136,23 +158,66 @@ ros2_icp_ekf_localization/
 │   ├── robot_simulation/
 │   │   ├── config/
 │   │   │   ├── bridge.yaml
-│   │   │   └── slam_toolbox.yaml
+│   │   │   ├── slam_toolbox.yaml
+│   │   │   └── nav2_icp_params.yaml
 │   │   ├── launch/
 │   │   │   ├── simulation.launch.py
-│   │   │   └── localization_icp.launch.py
+│   │   │   ├── localization_icp.launch.py
+│   │   │   ├── navigation_icp.launch.py
+│   │   │   └── benchmark_icp.launch.py
 │   │   └── worlds/
 │   │       ├── empty_world.sdf
 │   │       └── localization_world.sdf
 │   │
-│   └── icp_localization/
+│   ├── icp_localization/
+│   │   ├── CMakeLists.txt
+│   │   ├── package.xml
+│   │   └── src/
+│   │       └── icp_localization_node.cpp
+│   │
+│   ├── ekf_localization/
+│   │   ├── CMakeLists.txt
+│   │   ├── package.xml
+│   │   ├── config/
+│   │   ├── launch/
+│   │   │   └── ekf_localization.launch.py
+│   │   └── src/
+│   │       └── ekf_localization_node.cpp
+│   │
+│   └── localization_evaluation/
 │       ├── CMakeLists.txt
 │       ├── package.xml
 │       └── src/
-│           └── icp_localization_node.cpp
+│           ├── ground_truth_node.cpp
+│           ├── localization_evaluation_node.cpp
+│           └── localization_benchmark_runner.cpp
 │
 ├── maps/
 │   ├── localization_map.pgm
 │   └── localization_map.yaml
+│
+├── results/
+│   ├── benchmark_01/
+│   │   ├── README.md
+│   │   ├── localization_benchmark.csv
+│   │   ├── trajectory_comparison.png
+│   │   └── error_analysis.png
+│   │
+│   └── benchmark_02/
+│       ├── localization_benchmark_1.csv
+│       ├── localization_benchmark_2.csv
+│       ├── localization_benchmark_3.csv
+│       ├── localization_benchmark_4.csv
+│       ├── trajectory_comparison.png
+│       ├── error_analysis.png
+│       ├── position_error_time.png
+│       ├── yaw_error_time.png
+│       ├── position_rmse_comparison.png
+│       ├── yaw_rmse_comparison.png
+│       ├── segment_position_rmse.png
+│       ├── segment_yaw_rmse.png
+│       ├── 4run_mean_position_rmse.png
+│       └── 4run_mean_yaw_rmse.png
 │
 ├── docs/
 │   ├── COMMANDS.md
@@ -161,23 +226,6 @@ ros2_icp_ekf_localization/
 │
 ├── README.md
 └── .gitignore
-```
-
-Additional packages will be added as localization development progresses.
-
-Planned structure:
-
-```text
-src/
-├── robot_description/
-├── robot_simulation/
-├── icp_localization/
-├── ekf_localization/
-└── localization_bringup/
-
-maps/
-docs/
-results/
 ```
 
 ---
@@ -1211,30 +1259,26 @@ The temporary static identity `map -> odom` transform was removed. Translation a
 [✓] odom -> map transformation
 [✓] Map Target / Scan Source RViz2 validation
 [✓] Brute-force nearest-neighbor correspondence search
-[✓] Correspondence distance statistics
 [✓] Maximum-distance outlier rejection
 [✓] Source / Target centroid calculation
-[✓] 2D delta_x / delta_y / delta_yaw estimation
-[✓] Internal map_to_odom_ correction update
-[✓] ICP iteration for one LaserScan
+[✓] 2D rigid correction
+[✓] Iterative ICP update
 [✓] Convergence condition
 [✓] Gazebo /clock -> ROS2 /clock bridge
 [✓] LaserScan timestamp-aligned TF lookup
 [✓] Dynamic map -> odom TF broadcast
 [✓] Temporary static map -> odom removed
 [✓] Moving-robot translation / rotation validation
+[✓] /icp_pose publication
 [✓] Ground Truth evaluation pipeline
 [✓] Nav2 navigation-only integration
 [✓] Automated waypoint benchmark
 [✓] Odom vs ICP quantitative baseline
-
-[ ] Repeated benchmark trials / mean and standard deviation
-[ ] Strict timestamp-aligned estimator comparison
-[ ] ICP runtime / CPU measurements
-[ ] EKF sensor fusion
+[✓] EKF sensor fusion integration
+[✓] Odom vs ICP vs ICP+EKF four-run benchmark
 ```
 
-The next algorithm stage is EKF integration using Wheel Odometry, ICP, and IMU while preserving the same automated benchmark route for comparison.
+The custom ICP implementation and its integration with the benchmark pipeline are complete for the current project scope.
 
 ---
 
@@ -1325,175 +1369,280 @@ The measured data show increasing wheel-odometry position drift over the longer 
 
 ![Odom vs ICP Error Analysis](results/benchmark_01/error_analysis.png)
 
-### Current Evaluation Limitations
+### Evaluation Notes and Limitations
 
-The current result is a single simulation run. Continuous samples use the latest available Ground Truth, Odometry, and composed ICP TF at the evaluation instant rather than a final strict timestamp-aligned offline comparison. Repeated trials, statistical variation, processing-time measurement, and stricter timestamp alignment remain future evaluation work.
+The final benchmark contains four repeated simulation runs under the same route and configuration. Continuous comparison is performed at the benchmark runner's sampling interval using the latest available Ground Truth, Odometry, ICP pose, and EKF pose.
+
+The current result should therefore be interpreted as a repeatable simulation benchmark rather than a hardware-level localization accuracy claim.
+
+Remaining limitations:
+
+- Estimator samples are not offline-interpolated to one identical timestamp.
+- Ground Truth is used only for evaluation and is not fed into ICP or EKF estimation.
+- CPU utilization and per-update processing latency are not included in the final benchmark.
+- Nav2 navigation in the validated benchmark consumes the ICP-owned `map -> odom` TF; the EKF is evaluated in parallel through `/ekf_pose`.
+- AMCL and SLAM Toolbox localization are not included in the final four-run comparison.
 
 ---
 
 ## Phase 10 — EKF Sensor Fusion
 
-**Status: Planned**
+**Status: Completed**
 
-Implement an Extended Kalman Filter in C++.
-
-Inputs:
+A custom EKF was implemented in C++ with the state:
 
 ```text
-Wheel Odometry
-IMU
-ICP Pose
+[x, y, yaw]
 ```
 
-Output:
+Prediction uses:
 
 ```text
-Fused Localization Pose
+Wheel Odometry linear velocity
++
+IMU angular velocity
 ```
 
-The EKF will contain:
+Measurement update uses:
 
-1. State definition
-2. Motion model
-3. Prediction step
-4. Covariance propagation
-5. Measurement model
-6. Kalman gain calculation
-7. Measurement update
-8. Angle normalization
+```text
+Custom ICP global pose
+```
+
+The implemented flow is:
+
+```text
+/odom + /imu
+     |
+     v
+EKF Prediction
+     |
+     +<----------- /icp_pose
+     |                 |
+     |          Measurement Update
+     |                 |
+     +-----------------+
+     |
+     v
+ /ekf_pose
+ /ekf_odom
+```
+
+The EKF uses covariance propagation, innovation calculation, Kalman gain, angle normalization, and Joseph-form covariance update.
+
+The first valid ICP measurement initializes the EKF state. During motion, wheel odometry and IMU provide high-rate prediction while ICP provides lower-rate global correction.
 
 ---
 
-## Phase 11 — Baseline Localization Integration
+## Phase 11 — Nav2 Integration
 
-**Status: Planned**
+**Status: Completed for custom ICP navigation**
 
-Prepare baseline localization methods for comparison under the same benchmark conditions.
+Nav2 is used for:
 
-Comparison methods:
+- Global path planning
+- Local costmaps
+- Obstacle avoidance
+- DWB local control
+- `NavigateToPose` execution
+
+AMCL is intentionally not used in the benchmark. The custom ICP node provides the localization correction through `map -> odom`.
+
+The automated route is:
 
 ```text
-Wheel Odometry Only
-Custom ICP
-Custom ICP + EKF
-Nav2 AMCL
-SLAM Toolbox Localization
+START
+  |
+  v
+P1  (3.39557, -4.12722, yaw=0)
+  |
+  v
+P2  (5.61326,  4.40286, yaw=0)
+  |
+  v
+P3  (7.68631, -1.58174, yaw=0)
 ```
 
-All methods will use the same benchmark world, initial pose, map, and evaluation trajectory where applicable.
+The benchmark launch staggers major components to reduce lifecycle startup contention:
+
+```text
+0 s   Navigation / Gazebo / ICP
+10 s  EKF
+12 s  Ground Truth
+15 s  Benchmark Runner
+```
+
+The runner still verifies that `bt_navigator` is ACTIVE before sending P1.
+
+AMCL and SLAM Toolbox localization comparison are left as optional future extensions rather than requirements of the completed project scope.
 
 ---
 
 ## Phase 12 — Quantitative Localization Evaluation
 
-**Status: In Progress — Odom vs Custom ICP baseline completed**
+**Status: Completed**
 
-Compare each localization result against Gazebo ground truth.
+Four repeated START -> P1 -> P2 -> P3 benchmark runs were recorded under the same simulation configuration.
 
-Planned metrics:
-
-- X position error
-- Y position error
-- Yaw error
-- Translation RMSE
-- Maximum position error
-- Localization trajectory drift
-- ICP convergence rate
-- Processing time
-- Localization update frequency
-
-Comparison:
+Compared estimators:
 
 ```text
-                    Gazebo Ground Truth
-                           |
-          +----------------+----------------+
-          |                |                |
-          v                v                v
-      Odometry            ICP          ICP + EKF
-          |                |                |
-          +----------------+----------------+
-                           |
-                    Error Analysis
-                           |
-          +----------------+----------------+
-          |                                 |
-          v                                 v
-       AMCL                      SLAM Toolbox Localization
+Wheel Odometry
+Custom ICP
+Custom ICP + EKF
 ```
 
-The final evaluation will report quantitative targets, measured results, target achievement status, and comparison graphs.
+Ground Truth:
+
+```text
+Gazebo simulation pose
+```
+
+Final four-run mean ± sample standard deviation:
+
+| Method | Position RMSE | Yaw RMSE |
+|---|---:|---:|
+| Wheel Odometry | `0.0704 ± 0.0108 m` | `0.01106 ± 0.00196 rad` |
+| Custom ICP | `0.04288 ± 0.00022 m` | `0.01279 ± 0.00016 rad` |
+| Custom ICP + EKF | `0.04211 ± 0.00021 m` | `0.00510 ± 0.00010 rad` |
+
+Measured improvements:
+
+- Custom ICP reduced mean Position RMSE by approximately `39.1%` compared with Wheel Odometry.
+- ICP + EKF reduced mean Position RMSE by approximately `40.1%` compared with Wheel Odometry.
+- EKF reduced mean Yaw RMSE by approximately `60.1%` compared with ICP.
+- ICP -> EKF Position RMSE improvement was approximately `1.8%`, so most of the position-drift reduction came from scan-to-map ICP.
+- EKF provided the clearest improvement in heading stability.
+
+Four-run Position RMSE:
+
+```text
+Wheel Odometry : 7.04 ± 1.08 cm
+Custom ICP     : 4.29 ± 0.02 cm
+ICP + EKF      : 4.21 ± 0.02 cm
+```
+
+Interpretation:
+
+```text
+Wheel Odometry
+    -> continuous local motion estimate
+    -> accumulated drift varies by run
+
+Custom ICP
+    -> map-based correction
+    -> suppresses accumulated position drift
+
+ICP + EKF
+    -> Odom + IMU prediction
+    -> ICP global measurement update
+    -> slight additional position improvement
+    -> strong yaw stabilization
+```
+
+Final repeated-run graphs:
+
+![4-Run Mean Position RMSE](results/benchmark_02/4run_mean_position_rmse.png)
+
+![4-Run Mean Yaw RMSE](results/benchmark_02/4run_mean_yaw_rmse.png)
+
+![Trajectory Comparison](results/benchmark_02/trajectory_comparison.png)
+
+![Position Error Over Time](results/benchmark_02/position_error_time.png)
+
+![Yaw Error Over Time](results/benchmark_02/yaw_error_time.png)
 
 ---
 
 ## Phase 13 — Results and Documentation
 
-**Status: In Progress**
+**Status: Completed**
 
-Planned final result artifacts:
+Final result directory:
 
 ```text
 results/
-├── trajectory_comparison.png
-├── translation_error_time_series.png
-├── yaw_error_time_series.png
-├── localization_rmse_comparison.png
-├── processing_time_comparison.png
-└── localization_kpi_summary.png
+├── benchmark_01/
+│   ├── README.md
+│   ├── localization_benchmark.csv
+│   ├── trajectory_comparison.png
+│   └── error_analysis.png
+│
+└── benchmark_02/
+    ├── localization_benchmark_1.csv
+    ├── localization_benchmark_2.csv
+    ├── localization_benchmark_3.csv
+    ├── localization_benchmark_4.csv
+    ├── trajectory_comparison.png
+    ├── error_analysis.png
+    ├── position_error_time.png
+    ├── yaw_error_time.png
+    ├── position_rmse_comparison.png
+    ├── yaw_rmse_comparison.png
+    ├── segment_position_rmse.png
+    ├── segment_yaw_rmse.png
+    ├── 4run_mean_position_rmse.png
+    └── 4run_mean_yaw_rmse.png
 ```
 
-The final README will summarize:
+`benchmark_01` preserves the earlier Odom-vs-ICP baseline result.
 
-- Quantitative target values
-- Actual measured performance
-- Target achievement status
-- Odometry / ICP / ICP+EKF / AMCL / SLAM Toolbox comparison
-- Localization error and processing-time graphs
-- Analysis of failure cases and limitations
+`benchmark_02` contains the final four-run Odom-vs-ICP-vs-EKF evaluation.
 
 ---
 
-# 7. Final Goal
+# 7. Completed Scope
 
-The final system will demonstrate:
+The completed project demonstrates:
 
 ```text
-Gazebo Benchmark World
-          |
-          +---- 2D LiDAR
-          |
-          +---- Wheel Odometry
-          |
-          +---- IMU
-          |
-          v
-   Custom ICP Localization
-          |
-          v
-      EKF Fusion
-          |
-          v
-    Estimated Pose
-          |
-          +-------------------------------+
-          |                               |
-          v                               v
-  Gazebo Ground Truth           Baseline Localization
-                                  - Nav2 AMCL
-                                  - SLAM Toolbox
-          |                               |
-          +---------------+---------------+
-                          |
-                          v
-                 Quantitative Evaluation
-                 RMSE / Error / Latency
+Differential-Drive AMR
+        |
+        +---- 2D LiDAR
+        +---- Wheel Odometry
+        +---- IMU
+        |
+        v
+Custom Scan-to-Map ICP
+        |
+        +---- map -> odom
+        +---- /icp_pose
+        |
+        v
+Custom EKF
+        |
+        +---- /ekf_pose
+        +---- /ekf_odom
+        |
+        v
+Automated Nav2 Benchmark
+        |
+        v
+Gazebo Ground Truth Evaluation
+        |
+        v
+4 Repeated Runs
+        |
+        v
+Position / Yaw RMSE Analysis
 ```
 
-The project focuses on understanding and implementing the core algorithms behind AMR localization, including coordinate transforms, scan matching, state estimation, sensor fusion, map-based localization, and quantitative comparison against established ROS2 localization baselines.
+The current scope is considered complete as a portfolio-oriented ROS2 localization project: robot simulation, sensor integration, custom ICP, custom EKF, Nav2 benchmark automation, Ground Truth evaluation, repeated quantitative testing, and result documentation have all been implemented.
+
+Optional future extensions include:
+
+- Make the EKF the sole `map -> odom` TF authority and run Nav2 directly on the fused pose.
+- Add strict timestamp interpolation / offline rosbag evaluation.
+- Add Mahalanobis gating for ICP measurement rejection.
+- Measure mean / P95 ICP and EKF processing time and CPU utilization.
+- Compare against AMCL and SLAM Toolbox localization.
+- Validate the same stack on physical hardware.
 
 ---
 
 # 8. Build
+
+Build the full workspace:
 
 ```bash
 cd ~/ros2_icp_ekf_localization
@@ -1503,9 +1652,27 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
+For the final localization and benchmark packages only:
+
+```bash
+cd ~/ros2_icp_ekf_localization
+
+colcon build \
+  --symlink-install \
+  --packages-select \
+  icp_localization \
+  ekf_localization \
+  localization_evaluation \
+  robot_simulation
+
+source install/setup.bash
+```
+
 ---
 
 # 9. Run Robot Model in RViz2
+
+This launch is for URDF / TF / RobotModel validation only.
 
 ```bash
 ros2 launch robot_description display.launch.py
@@ -1515,11 +1682,13 @@ ros2 launch robot_description display.launch.py
 
 # 10. Run Gazebo Simulation
 
+Use this launch for simulation and sensor validation:
+
 ```bash
 ros2 launch robot_simulation simulation.launch.py
 ```
 
-Run the benchmark localization world with a fixed initial pose:
+Run the benchmark world directly:
 
 ```bash
 ros2 launch robot_simulation simulation.launch.py \
@@ -1531,16 +1700,88 @@ yaw:=1.5708
 
 ---
 
+# 11. Run Custom ICP Localization
+
+```bash
+ros2 launch robot_simulation localization_icp.launch.py
+```
+
+Main validation topics:
+
+```text
+/scan
+/odom
+/icp_pose
+/icp_map_points
+/icp_scan_points_map
+```
+
+Main TF:
+
+```text
+map -> odom -> base_footprint
+```
+
+---
+
+# 12. Run Nav2 with Custom ICP
+
+```bash
+ros2 launch robot_simulation navigation_icp.launch.py
+```
+
+This configuration uses Nav2 planning / control with custom ICP localization and does not start AMCL.
+
+---
+
+# 13. Run Automated Odom / ICP / EKF Benchmark
+
+Run only the benchmark launch. It starts navigation, ICP, EKF, Ground Truth, and the benchmark runner in the required order.
+
+```bash
+ros2 launch robot_simulation benchmark_icp.launch.py
+```
+
+Expected route:
+
+```text
+START -> P1 -> P2 -> P3
+```
+
+Expected estimator topics:
+
+```text
+/ground_truth_pose
+/odom
+/icp_pose
+/ekf_pose
+```
+
+The generated CSV contains:
+
+```text
+Ground Truth pose
+Wheel Odometry pose / error
+ICP pose / error
+EKF pose / error
+START / P1 / P2 / P3 events
+continuous SAMPLE rows
+```
+
+---
+
 ## Progress
 
 ```text
 [████████████████████] AMR / Simulation
 [████████████████████] Sensors / Mapping
 [████████████████████] ICP Localization
-[░░░░░░░░░░░░░░░░░░░░] EKF Sensor Fusion
-[████████████████░░░░] Evaluation Infrastructure
+[████████████████████] EKF Sensor Fusion
+[████████████████████] Nav2 Benchmark
+[████████████████████] 4-Run Evaluation
+[████████████████████] Results / Documentation
 ```
 
 Current milestone:
 
-**Custom ICP localization now publishes the dynamic `map -> odom` TF and has been validated during translation and rotation. Ground Truth, Nav2 navigation-only integration, and an automated START -> P1 -> P2 -> P3 benchmark are complete. The first measured Odom vs ICP run reduced Position RMSE from `0.1149 m` to `0.0428 m`. Next: implement EKF fusion and repeat the same benchmark with Odom / ICP / ICP+EKF.**
+**Portfolio project scope completed. Four repeated benchmark runs produced a mean Position RMSE of `0.0704 m` for Wheel Odometry, `0.04288 m` for Custom ICP, and `0.04211 m` for ICP + EKF. The strongest EKF improvement was Yaw RMSE, reduced from `0.01279 rad` with ICP to `0.00510 rad` with ICP + EKF.**
