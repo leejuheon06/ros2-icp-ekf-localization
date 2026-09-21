@@ -278,6 +278,119 @@ Gazebo AMR
 
 ---
 
+## Implementation & Validation Evidence
+
+The images in `docs/images/` document the implementation and validation process.  
+The figures in `results/benchmark_02/` are reserved for the final quantitative evaluation.
+
+### Robot Model & Differential Drive
+
+<table>
+<tr>
+<td width="50%" align="center">
+<b>RViz2 Robot Model Validation</b><br><br>
+<img src="docs/images/01_robot_model.png" width="100%">
+</td>
+<td width="50%" align="center">
+<b>Differential Drive — Straight Motion</b><br><br>
+<img src="docs/images/02_differential_drive_gazebo_straight.gif" width="100%">
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<b>Differential Drive — Rotation</b><br><br>
+<img src="docs/images/02_differential_drive_gazebo_turn.gif" width="100%">
+</td>
+<td width="50%" align="center">
+<b>ROS2 ↔ Gazebo Bridge</b><br><br>
+<img src="docs/images/03_differential_drive_ROS2_bridge.gif" width="100%">
+</td>
+</tr>
+</table>
+
+### Joint State & LiDAR Validation
+
+![Joint States and LiDAR Scan in RViz2](docs/images/04_joint_states_lidar_scan_rviz.gif)
+
+This stage verifies that the simulated wheel joint states and LiDAR scan are correctly bridged into ROS2 and visualized in RViz2.
+
+### Evaluation World & Mapping
+
+<table>
+<tr>
+<td width="50%" align="center">
+<b>Localization Benchmark World</b><br><br>
+<img src="docs/images/07_localization_world_gazebo.png.png" width="100%">
+</td>
+<td width="50%" align="center">
+<b>SLAM Toolbox Mapping</b><br><br>
+<img src="docs/images/08_slam_toolbox_mapping_rviz.gif" width="100%">
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<b>Generated Occupancy Grid</b><br><br>
+<img src="docs/images/08_slam_toolbox_generated_map_rviz.png" width="100%">
+</td>
+<td width="50%" align="center">
+<b>Saved Map Reload Validation</b><br><br>
+<img src="docs/images/09_saved_map_reload_rviz.png" width="100%">
+</td>
+</tr>
+</table>
+
+The benchmark environment uses asymmetric wall and obstacle geometry to provide distinctive LiDAR features for scan-to-map matching.
+
+### ICP Input Preparation & Frame Validation
+
+<table>
+<tr>
+<td width="50%" align="center">
+<b>LaserScan → PointCloud Validation</b><br><br>
+<img src="docs/images/10_laserscan_pointcloud_overlap_rviz.gif" width="100%">
+</td>
+<td width="50%" align="center">
+<b>OccupancyGrid → Reference PointCloud</b><br><br>
+<img src="docs/images/11_occupancygrid_reference_pointcloud_rviz.gif" width="100%">
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<b>LaserScan → Odom Frame</b><br><br>
+<img src="docs/images/12_laserscan_odom_transform_rviz.gif" width="100%">
+</td>
+<td width="50%" align="center">
+<b>Map-Frame ICP Source / Target Alignment</b><br><br>
+<img src="docs/images/13_icp_map_scan_alignment_rviz.png" width="100%">
+</td>
+</tr>
+</table>
+
+These captures validate the ICP input pipeline before iterative correction:
+
+```text
+/scan
+  ↓
+2D scan points
+  ↓
+laser_link → odom
+  ↓
+odom → map
+  ↓
+Current scan [Source]
+        +
+Saved map points [Target]
+```
+
+### Nav2 + ICP Automated Benchmark
+
+![Nav2 + ICP Gazebo / RViz2 Benchmark](docs/images/14_nav2_icp_gazebo_rviz_benchmark.gif)
+
+This GIF shows the integrated navigation benchmark in which Nav2 drives the AMR while the custom ICP localization stack provides the global `map -> odom` correction.
+
+
+---
+
 ## Automated Benchmark
 
 ### Route
@@ -794,14 +907,6 @@ The current implementation is complete for the intended portfolio scope.
 
 ---
 
-## References
-
-1. S. Thrun, W. Burgard, D. Fox, *Probabilistic Robotics*, MIT Press, 2005.
-2. P. J. Besl, N. D. McKay, “A Method for Registration of 3-D Shapes,” *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 1992.
-3. ROS 2 Humble documentation.
-4. Nav2 documentation.
-
----
 
 ## Result Directory
 
