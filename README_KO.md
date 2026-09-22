@@ -7,15 +7,15 @@
 </div>
 
 **Scan-to-Map ICP · Wheel Odometry · IMU Fusion · Nav2 · Ground Truth Benchmark**  
-Custom localization pipeline for a differential-drive AMR, implemented and evaluated in ROS2 Humble / C++17.
+ROS2 Humble / C++17 환경에서 구현하고 정량 평가한 Differential-Drive AMR Localization 프로젝트입니다.
 
 ---
 
-## Overview
+## 프로젝트 개요
 
-This project implements a localization pipeline for an Autonomous Mobile Robot (AMR) using **2D LiDAR, wheel odometry, IMU, custom ICP scan matching, and a custom Extended Kalman Filter (EKF)**.
+이 프로젝트는 **2D LiDAR, Wheel Odometry, IMU, Custom ICP Scan Matching, Custom Extended Kalman Filter(EKF)** 를 이용해 AMR(Autonomous Mobile Robot)의 위치추정 파이프라인을 직접 구현한 프로젝트입니다.
 
-The main objective is not simply to run an existing localization package, but to directly implement and evaluate the internal localization process:
+목표는 기존 localization 패키지를 단순히 실행하는 것이 아니라, 위치추정 내부 과정을 직접 구현하고 각 단계의 성능을 정량적으로 비교하는 것입니다.
 
 ```text
 Wheel Odometry
@@ -29,29 +29,29 @@ Custom EKF
 [x, y, yaw]
 ```
 
-The system is integrated with Nav2 and evaluated against Gazebo Ground Truth using an automated **START → P1 → P2 → P3** benchmark.
+시스템은 Nav2와 통합되어 있으며, Gazebo Ground Truth를 기준으로 자동화된 **START → P1 → P2 → P3** 경로를 주행하면서 성능을 평가합니다.
 
-**Key highlights:**
+**핵심 구현 내용**
 
-- **Custom 2D Scan-to-Map ICP** implemented in C++17
-- Dynamic **`map -> odom`** correction from ICP
-- **Custom EKF** with state `[x, y, yaw]`
-- EKF prediction using **wheel odometry + IMU yaw rate**
-- ICP global pose used as the EKF measurement update
-- Nav2 navigation integrated **without AMCL**
-- Automated Ground Truth benchmark with CSV logging
-- **4 repeated runs** under the same route and simulation conditions
-- Final mean Position RMSE:
+- C++17 기반 **Custom 2D Scan-to-Map ICP**
+- ICP가 동적으로 발행하는 **`map -> odom`** correction
+- 상태 `[x, y, yaw]` 기반 **Custom EKF**
+- Wheel Odometry + IMU yaw rate 기반 EKF Prediction
+- ICP global pose 기반 EKF Measurement Update
+- **AMCL 없이** Nav2 Navigation 통합
+- Gazebo Ground Truth 기반 자동 benchmark 및 CSV logging
+- 동일 경로 / 동일 조건 **4회 반복 주행**
+- 최종 평균 Position RMSE
   - Wheel Odometry: **0.0704 m**
   - ICP: **0.04288 m**
   - ICP + EKF: **0.04211 m**
-- EKF reduced ICP Yaw RMSE by approximately **60.1%**
+- EKF 적용 후 ICP 대비 Yaw RMSE 약 **60.1% 감소**
 
 ---
 
-## Results at a Glance
+## 주요 결과
 
-The main benchmark figures are embedded directly from `results/benchmark_02/`.
+최종 benchmark 결과 이미지는 `results/benchmark_02/`에서 직접 불러옵니다.
 
 <table>
 <tr>
@@ -66,17 +66,17 @@ The main benchmark figures are embedded directly from `results/benchmark_02/`.
 </tr>
 <tr>
 <td width="50%" align="center">
-<b>4-Run Mean Position RMSE</b><br><br>
+<b>4회 평균 Position RMSE</b><br><br>
 <img src="results/benchmark_02/4run_mean_position_rmse.png" width="100%">
 </td>
 <td width="50%" align="center">
-<b>4-Run Mean Yaw RMSE</b><br><br>
+<b>4회 평균 Yaw RMSE</b><br><br>
 <img src="results/benchmark_02/4run_mean_yaw_rmse.png" width="100%">
 </td>
 </tr>
 </table>
 
-Additional detailed plots:
+추가 상세 그래프:
 
 - [Position Error Over Time](results/benchmark_02/position_error_time.png)
 - [Yaw Error Over Time](results/benchmark_02/yaw_error_time.png)
@@ -85,10 +85,9 @@ Additional detailed plots:
 - [Segment Position RMSE](results/benchmark_02/segment_position_rmse.png)
 - [Segment Yaw RMSE](results/benchmark_02/segment_yaw_rmse.png)
 
-
 ---
 
-## System Architecture
+## 시스템 아키텍처
 
 > *Simulation → Localization → Fusion → Navigation → Evaluation*
 
@@ -131,7 +130,7 @@ Additional detailed plots:
      /cmd_vel                 CSV / RMSE / Plots
 ```
 
-### Validated TF Structure
+### 검증된 TF 구조
 
 ```text
 map
@@ -152,16 +151,16 @@ base_link
  └── right_wheel_link
 ```
 
-> **Current benchmark architecture:** Nav2 uses the ICP-owned `map -> odom` TF.  
-> The EKF is evaluated in parallel through `/ekf_pose`; it is not yet the sole TF authority.
+> **현재 benchmark 구조:** Nav2는 ICP가 발행하는 `map -> odom` TF를 사용합니다.  
+> EKF는 `/ekf_pose`를 통해 병렬로 정량 평가되며, 아직 최종 TF authority는 아닙니다.
 
 ---
 
-## Features
+## 주요 기능
 
 ### Localization — Custom 2D Scan-to-Map ICP
 
-The ICP node aligns the current LiDAR scan against points extracted from a saved occupancy map.
+ICP node는 현재 LiDAR scan과 저장된 Occupancy Grid에서 추출한 map point들을 정합합니다.
 
 ```text
 LaserScan
@@ -183,32 +182,32 @@ Iterative Update
 map -> odom
 ```
 
-**Implementation details:**
+**구현 파라미터**
 
-| Item | Value |
+| 항목 | 값 |
 |---|---:|
-| LiDAR samples | 360 |
+| LiDAR sample 수 | 360 |
 | LiDAR update rate | 10 Hz |
 | Scan range | 0.10–10.0 m |
-| Nearest-neighbor method | Brute-force |
+| Nearest-neighbor 방식 | Brute-force |
 | Max correspondence distance | 0.15 m |
-| Maximum ICP iterations | 10 |
+| 최대 ICP iteration | 10 |
 | Translation convergence | 0.001 m |
 | Rotation convergence | 0.001 rad |
 
-The rigid correction is estimated from matched source / target point pairs and iteratively composed into the internal `map_to_odom` transform.
+Matching된 Source / Target point pair로부터 2D rigid correction을 계산하고, 이를 내부 `map_to_odom` transform에 반복적으로 합성합니다.
 
 ---
 
 ### Sensor Fusion — Custom EKF
 
-The EKF state is:
+EKF state는 다음과 같습니다.
 
 ```text
 [x, y, yaw]
 ```
 
-**Prediction input:**
+**Prediction 입력**
 
 ```text
 Wheel Odometry
@@ -218,7 +217,7 @@ IMU
 - angular_velocity.z
 ```
 
-**Measurement input:**
+**Measurement 입력**
 
 ```text
 Custom ICP
@@ -235,17 +234,17 @@ y(k+1)   = y(k)   + v sin(yaw) dt
 yaw(k+1) = yaw(k) + omega dt
 ```
 
-The implementation includes:
+구현 내용:
 
 - State prediction
-- Jacobian-based covariance propagation
-- ICP innovation calculation
+- Jacobian 기반 covariance propagation
+- ICP innovation 계산
 - Yaw residual normalization
-- Kalman gain
+- Kalman gain 계산
 - Measurement update
 - Joseph-form covariance update
 
-Initial tuning values:
+초기 tuning 값:
 
 | Parameter | Value |
 |---|---:|
@@ -258,9 +257,9 @@ Initial tuning values:
 
 ---
 
-### Navigation — Nav2 with Custom Localization
+### Navigation — Custom Localization + Nav2
 
-Nav2 is used for:
+Nav2는 다음 기능을 담당합니다.
 
 - Global planning
 - Local costmap
@@ -268,7 +267,7 @@ Nav2 is used for:
 - DWB local control
 - `NavigateToPose`
 
-AMCL is intentionally excluded from the benchmark.
+Benchmark에서는 AMCL을 사용하지 않습니다.
 
 ```text
 Custom ICP
@@ -284,27 +283,27 @@ Gazebo AMR
 
 ---
 
-## Implementation & Validation Evidence
+## 구현 및 검증 자료
 
-The images in `docs/images/` document the implementation and validation process.  
-The figures in `results/benchmark_02/` are reserved for the final quantitative evaluation.
+`docs/images/`의 자료는 구현 과정과 검증 내용을 기록한 이미지 / GIF입니다.  
+`results/benchmark_02/`는 최종 정량 평가 결과 전용으로 사용합니다.
 
 ### Robot Model & Differential Drive
 
 <table>
 <tr>
 <td width="50%" align="center">
-<b>RViz2 Robot Model Validation</b><br><br>
+<b>RViz2 Robot Model 검증</b><br><br>
 <img src="docs/images/01_robot_model.png" width="100%">
 </td>
 <td width="50%" align="center">
-<b>Differential Drive — Straight Motion</b><br><br>
+<b>Differential Drive — 직진</b><br><br>
 <img src="docs/images/02_differential_drive_gazebo_straight.gif" width="100%">
 </td>
 </tr>
 <tr>
 <td width="50%" align="center">
-<b>Differential Drive — Rotation</b><br><br>
+<b>Differential Drive — 회전</b><br><br>
 <img src="docs/images/02_differential_drive_gazebo_turn.gif" width="100%">
 </td>
 <td width="50%" align="center">
@@ -314,11 +313,11 @@ The figures in `results/benchmark_02/` are reserved for the final quantitative e
 </tr>
 </table>
 
-### Joint State & LiDAR Validation
+### Joint State & LiDAR 검증
 
 ![Joint States and LiDAR Scan in RViz2](docs/images/04_joint_states_lidar_scan_rviz.gif)
 
-This stage verifies that the simulated wheel joint states and LiDAR scan are correctly bridged into ROS2 and visualized in RViz2.
+Gazebo의 wheel joint state와 LiDAR scan이 ROS2로 정상 전달되고 RViz2에서 시각화되는지 검증한 단계입니다.
 
 ### Evaluation World & Mapping
 
@@ -335,24 +334,24 @@ This stage verifies that the simulated wheel joint states and LiDAR scan are cor
 </tr>
 <tr>
 <td width="50%" align="center">
-<b>Generated Occupancy Grid</b><br><br>
+<b>생성된 Occupancy Grid</b><br><br>
 <img src="docs/images/08_slam_toolbox_generated_map_rviz.png" width="100%">
 </td>
 <td width="50%" align="center">
-<b>Saved Map Reload Validation</b><br><br>
+<b>Saved Map Reload 검증</b><br><br>
 <img src="docs/images/09_saved_map_reload_rviz.png" width="100%">
 </td>
 </tr>
 </table>
 
-The benchmark environment uses asymmetric wall and obstacle geometry to provide distinctive LiDAR features for scan-to-map matching.
+Benchmark 환경은 Scan-to-Map matching 시 기하학적 모호성을 줄이기 위해 비대칭 형태의 벽과 장애물을 배치했습니다.
 
-### ICP Input Preparation & Frame Validation
+### ICP Input Preparation & Frame 검증
 
 <table>
 <tr>
 <td width="50%" align="center">
-<b>LaserScan → PointCloud Validation</b><br><br>
+<b>LaserScan → PointCloud 검증</b><br><br>
 <img src="docs/images/10_laserscan_pointcloud_overlap_rviz.gif" width="100%">
 </td>
 <td width="50%" align="center">
@@ -372,7 +371,7 @@ The benchmark environment uses asymmetric wall and obstacle geometry to provide 
 </tr>
 </table>
 
-These captures validate the ICP input pipeline before iterative correction:
+ICP iterative correction 이전에 다음 입력 pipeline을 검증했습니다.
 
 ```text
 /scan
@@ -388,20 +387,19 @@ Current scan [Source]
 Saved map points [Target]
 ```
 
-### Nav2 + ICP Automated Benchmark
+### Nav2 + ICP 자동 Benchmark
 
 ![Nav2 + ICP Gazebo / RViz2 Benchmark](docs/images/14_nav2_icp_gazebo_rviz_benchmark.gif)
 
-This GIF shows the integrated navigation benchmark in which Nav2 drives the AMR while the custom ICP localization stack provides the global `map -> odom` correction.
-
+Nav2가 AMR을 주행시키는 동안 Custom ICP가 global `map -> odom` correction을 제공하는 통합 benchmark입니다.
 
 ---
 
-## Automated Benchmark
+## 자동 Benchmark
 
-### Route
+### 주행 경로
 
-The same route is used for every run:
+모든 최종 실험은 동일한 경로를 사용합니다.
 
 ```text
 START
@@ -416,7 +414,7 @@ P2  (5.61326,  4.40286, 0.0)
 P3  (7.68631, -1.58174, 0.0)
 ```
 
-### Benchmark Inputs
+### Benchmark 입력
 
 ```text
 /ground_truth_pose
@@ -425,9 +423,9 @@ P3  (7.68631, -1.58174, 0.0)
 /ekf_pose
 ```
 
-### Logged Data
+### 기록 데이터
 
-Each CSV contains:
+각 CSV에는 다음 값이 기록됩니다.
 
 ```text
 Ground Truth x / y / yaw
@@ -439,13 +437,13 @@ Odom position / yaw error
 ICP position / yaw error
 EKF position / yaw error
 
-START / P1 / P2 / P3 events
+START / P1 / P2 / P3 event
 continuous SAMPLE rows
 ```
 
-### Startup Sequence
+### Startup 순서
 
-A staggered launch sequence is used to reduce lifecycle startup contention:
+Nav2 lifecycle startup 경합을 줄이기 위해 실행 순서를 나누었습니다.
 
 ```text
 0 s   Gazebo + ICP + Nav2
@@ -454,13 +452,13 @@ A staggered launch sequence is used to reduce lifecycle startup contention:
 15 s  Benchmark Runner
 ```
 
-The benchmark runner additionally checks that `bt_navigator` is ACTIVE before sending the first goal.
+Benchmark Runner는 첫 goal을 보내기 전에 `bt_navigator`가 ACTIVE 상태인지 추가로 확인합니다.
 
 ---
 
-## Performance Results
+## 성능 결과
 
-### Four-Run Quantitative Evaluation
+### 4회 반복 정량 평가
 
 | Method | Position RMSE | Yaw RMSE |
 |---|---:|---:|
@@ -468,14 +466,14 @@ The benchmark runner additionally checks that `bt_navigator` is ACTIVE before se
 | Custom ICP | **0.04288 ± 0.00022 m** | **0.01279 ± 0.00016 rad** |
 | Custom ICP + EKF | **0.04211 ± 0.00021 m** | **0.00510 ± 0.00010 rad** |
 
-### Improvement Summary
+### 개선율
 
-| Comparison | Result |
+| 비교 | 결과 |
 |---|---:|
-| Odom → ICP Position RMSE | **39.1% reduction** |
-| Odom → ICP+EKF Position RMSE | **40.1% reduction** |
-| ICP → ICP+EKF Position RMSE | **1.8% reduction** |
-| ICP → ICP+EKF Yaw RMSE | **60.1% reduction** |
+| Odom → ICP Position RMSE | **39.1% 감소** |
+| Odom → ICP+EKF Position RMSE | **40.1% 감소** |
+| ICP → ICP+EKF Position RMSE | **1.8% 감소** |
+| ICP → ICP+EKF Yaw RMSE | **60.1% 감소** |
 
 ### Position RMSE
 
@@ -494,7 +492,7 @@ ICP + EKF
 4.21 ± 0.02 cm
 ```
 
-The result indicates that **most of the position-drift correction comes from ICP**.
+Position drift 감소의 대부분은 **ICP 단계에서 발생**했습니다.
 
 ### Yaw RMSE
 
@@ -511,15 +509,15 @@ ICP + EKF
 0.00510 rad
 ```
 
-The strongest EKF improvement is observed in heading estimation.
+EKF의 가장 뚜렷한 효과는 **heading / yaw 안정화**에서 나타났습니다.
 
 ---
 
-## Result Figures
+## 결과 그래프
 
-All figures below are loaded using repository-relative paths, so they are rendered directly on the GitHub README page.
+아래 이미지는 repository-relative path를 사용하므로 GitHub README에서 직접 표시됩니다.
 
-### Trajectory and Overall Error
+### Trajectory & Overall Error
 
 ![Trajectory Comparison](results/benchmark_02/trajectory_comparison.png)
 
@@ -531,7 +529,7 @@ All figures below are loaded using repository-relative paths, so they are render
 
 ![Yaw Error Over Time](results/benchmark_02/yaw_error_time.png)
 
-### Overall RMSE Comparison
+### Overall RMSE
 
 ![Position RMSE Comparison](results/benchmark_02/position_rmse_comparison.png)
 
@@ -543,7 +541,7 @@ All figures below are loaded using repository-relative paths, so they are render
 
 ![Segment Yaw RMSE](results/benchmark_02/segment_yaw_rmse.png)
 
-### Four-Run Mean ± Standard Deviation
+### 4회 평균 ± 표준편차
 
 ![4-Run Mean Position RMSE](results/benchmark_02/4run_mean_position_rmse.png)
 
@@ -551,13 +549,13 @@ All figures below are loaded using repository-relative paths, so they are render
 
 ---
 
-## Key Findings & Design Decisions
+## 주요 결과 및 설계 판단
 
-### 1. ICP is the primary position-drift correction source
+### 1. Position drift 감소의 핵심은 ICP
 
-Wheel odometry showed increasing position error as the route progressed.
+Wheel Odometry는 주행이 진행될수록 누적 Position error가 증가했습니다.
 
-ICP reduced the four-run mean Position RMSE from:
+ICP 적용 후 4회 평균 Position RMSE:
 
 ```text
 0.0704 m
@@ -565,138 +563,136 @@ ICP reduced the four-run mean Position RMSE from:
 0.04288 m
 ```
 
-The map therefore acts as the global reference that prevents unrestricted odometry drift.
+저장된 map이 global reference 역할을 하기 때문에 Odom의 누적 drift를 제한할 수 있었습니다.
 
 ---
 
-### 2. EKF provides its clearest benefit in yaw stability
+### 2. EKF의 가장 큰 효과는 Yaw 안정화
 
-Adding EKF changed Position RMSE only slightly:
+EKF 적용 전후 Position RMSE 차이는 크지 않았습니다.
 
 ```text
 ICP       0.04288 m
 ICP+EKF   0.04211 m
 ```
 
-but Yaw RMSE changed substantially:
+반면 Yaw RMSE는 크게 감소했습니다.
 
 ```text
 ICP       0.01279 rad
 ICP+EKF   0.00510 rad
 ```
 
-This indicates that the current fusion structure is more effective at stabilizing orientation than at producing a large additional x/y correction.
+현재 fusion 구조에서는 EKF가 x/y를 크게 추가 보정하기보다 orientation을 안정화하는 데 더 효과적이라는 결과를 확인했습니다.
 
 ---
 
-### 3. ICP does not always outperform odometry in yaw
+### 3. ICP가 모든 상태에서 항상 Odom보다 정확한 것은 아님
 
-The four-run mean ICP Yaw RMSE is slightly larger than the Wheel Odometry result.
-
-Therefore:
+4회 평균 기준 ICP Yaw RMSE는 Wheel Odometry보다 약간 크게 나타났습니다.
 
 ```text
-ICP ≠ automatically better in every state dimension
+ICP ≠ 모든 상태 변수에서 자동으로 더 정확함
 ```
 
-In the current implementation:
+현재 결과에서는:
 
 ```text
 ICP
-→ strong position correction
+→ Position correction에 강점
 
 EKF
-→ yaw stabilization
+→ Yaw stabilization에 강점
 ```
 
-This separation is reflected in the measured data.
+이라는 역할 차이가 확인됩니다.
 
 ---
 
-### 4. TF hierarchy and algorithm order are different concepts
+### 4. TF 구조와 알고리즘 실행 순서는 다름
 
-The TF tree is:
+TF tree:
 
 ```text
 map -> odom -> base_footprint
 ```
 
-but the processing flow is:
+실제 처리 순서:
 
 ```text
 Robot moves
     ↓
-Wheel odometry updates
+Wheel odometry update
     ↓
 LiDAR scan arrives
     ↓
-ICP aligns scan to map
+ICP scan-to-map alignment
     ↓
-map -> odom correction updates
+map -> odom correction update
 ```
 
-The TF hierarchy is a coordinate relationship, not the chronological execution order.
+TF hierarchy는 좌표계 간 관계를 의미하며, 알고리즘의 시간적 실행 순서를 의미하지 않습니다.
 
 ---
 
-### 5. Timestamp-aligned TF lookup was required for moving ICP
+### 5. Moving ICP에는 timestamp-aligned TF가 필요함
 
-Using only the latest TF can misplace a LiDAR scan when the robot is moving.
+Latest TF만 사용하면 로봇이 이동 중일 때 LiDAR measurement time과 TF time이 달라질 수 있습니다.
 
-The ICP node therefore performs TF lookup using the LaserScan timestamp.
+따라서 ICP node는 LaserScan timestamp 기준으로 TF lookup을 수행하도록 변경했습니다.
 
-This was necessary to keep the scan placement and robot pose temporally consistent.
+이 과정은 이동 중 scan placement와 robot pose 사이의 temporal consistency를 확보하기 위해 필요했습니다.
 
 ---
 
-### 6. Nav2 startup required staged launch timing
+### 6. Nav2 startup은 단계적으로 실행
 
-Launching Gazebo, Nav2 lifecycle nodes, ICP, EKF, Ground Truth, and the benchmark runner at the same moment caused a lifecycle service timeout in `smoother_server`.
+Gazebo, Nav2 lifecycle nodes, ICP, EKF, Ground Truth, Benchmark Runner를 동시에 시작했을 때 `smoother_server` lifecycle service timeout이 발생했습니다.
 
-The final benchmark launch uses staged startup:
+최종 launch에서는 다음 순서로 실행합니다.
 
 ```text
 Navigation → EKF → Ground Truth → Benchmark Runner
 ```
 
-This allowed Nav2 to reach the ACTIVE state before automated waypoint execution.
+이후 `bt_navigator` ACTIVE 상태를 확인한 뒤 waypoint navigation을 시작하도록 구성했습니다.
 
 ---
 
-## Troubleshooting Log — Selected
+## 주요 문제 해결 기록
 
-| Issue | Root Cause | Resolution |
+| 문제 | 원인 | 해결 |
 |---|---|---|
-| Positive `/cmd_vel` moved robot backward | Wheel joint axis direction was reversed | Changed wheel joint axis to `0 0 -1` |
-| Wheels disappeared in RViz | Continuous wheel joint states were unavailable | Added Gazebo JointStatePublisher and bridged `/joint_states` |
-| LaserScan dropped in RViz | Message Filter / queue behavior | Adjusted scan / TF validation configuration |
-| Static `map -> odom` prevented real localization correction | Temporary validation TF remained active | Replaced with dynamic ICP TransformBroadcaster |
-| Moving ICP needed better temporal consistency | Scan and TF used different effective times | Changed TF lookup to LaserScan timestamp |
-| Nav2 benchmark did not start | Lifecycle startup contention / smoother service timeout | Staggered benchmark launch timing |
-| Repetitive ICP/EKF logs obscured benchmark events | Per-update INFO logging | Commented repetitive INFO logs, retained WARN / ERROR |
+| `/cmd_vel` 양수에서 로봇이 반대로 이동 | Wheel joint axis 방향 반대 | Wheel joint axis를 `0 0 -1`로 수정 |
+| RViz에서 wheel이 사라짐 | Continuous wheel joint state 미발행 | Gazebo JointStatePublisher 추가 및 `/joint_states` bridge |
+| RViz LaserScan message drop | Message Filter / queue 문제 | Scan / TF 검증 설정 조정 |
+| Static `map -> odom` 때문에 실제 correction 불가 | 검증용 static TF가 남아 있음 | Dynamic ICP TransformBroadcaster로 교체 |
+| 이동 중 ICP temporal mismatch | Scan과 TF의 timestamp 불일치 | LaserScan timestamp 기반 TF lookup |
+| Nav2 benchmark 미시작 | Lifecycle startup contention / smoother timeout | Benchmark launch 순차 실행 |
+| ICP/EKF 반복 로그로 benchmark event 확인 어려움 | Per-update INFO logging | 반복 INFO 주석 처리, WARN / ERROR 유지 |
 
 ---
 
-## Evaluation Notes
+## 평가 조건
 
 ### Ground Truth
 
-Gazebo Ground Truth is used only as the evaluation reference.
+Gazebo Ground Truth는 **평가용 기준값으로만 사용**합니다.
 
 ```text
 Ground Truth
       X
       |
-      |  not used for estimator input
+      |  estimator input으로 사용하지 않음
       |
 ICP / EKF
 ```
 
-### Repeatability
+### 반복성
 
-Four repeated runs were performed under the same route and simulation configuration.
+동일한 경로와 simulation configuration으로 총 4회 반복 주행했습니다.
 
-Position RMSE standard deviation:
+Position RMSE 표준편차:
 
 ```text
 Wheel Odometry : ± 0.0108 m
@@ -704,25 +700,25 @@ Custom ICP     : ± 0.00022 m
 ICP + EKF      : ± 0.00021 m
 ```
 
-Under this benchmark, the map-based localization outputs showed much lower run-to-run variation than odometry-only estimation.
+현재 simulation benchmark에서 ICP / ICP+EKF 결과는 Wheel Odometry보다 주행 간 변동이 작았습니다.
 
 ---
 
-## Limitations
+## 한계
 
-- Final evaluation is simulation-based
-- Benchmark samples are not offline-interpolated to one exact timestamp
-- ICP and EKF are not fully statistically independent because both depend on odometry information
-- EKF does not yet own the final `map -> odom` TF used by Nav2
-- CPU utilization and processing-time statistics are not included
-- AMCL / SLAM Toolbox localization are not included in the final four-run comparison
-- ICP nearest-neighbor search currently uses brute-force search rather than a spatial index
+- 최종 평가는 Gazebo simulation 기반
+- Benchmark sample은 모든 estimator를 하나의 정확한 timestamp로 offline interpolation하지 않음
+- ICP와 EKF는 모두 Odometry 정보에 의존하므로 완전히 statistical independent하지 않음
+- 현재 Nav2가 사용하는 최종 `map -> odom` TF는 ICP가 발행하며, EKF는 아직 최종 TF authority가 아님
+- CPU utilization / processing-time 통계 미포함
+- AMCL / SLAM Toolbox localization과 최종 4회 비교는 수행하지 않음
+- ICP nearest-neighbor search는 현재 brute-force 방식이며 spatial index를 사용하지 않음
 
 ---
 
 ## Build & Run
 
-### Build Full Workspace
+### 전체 Workspace Build
 
 ```bash
 cd ~/ros2_icp_ekf_localization
@@ -732,7 +728,7 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-### Build Localization / Evaluation Packages
+### Localization / Evaluation Package Build
 
 ```bash
 colcon build \
@@ -746,7 +742,7 @@ colcon build \
 source install/setup.bash
 ```
 
-### Robot Model Validation
+### Robot Model 검증
 
 ```bash
 ros2 launch robot_description display.launch.py
@@ -764,7 +760,7 @@ ros2 launch robot_simulation simulation.launch.py
 ros2 launch robot_simulation localization_icp.launch.py
 ```
 
-### Nav2 with Custom ICP
+### Custom ICP + Nav2
 
 ```bash
 ros2 launch robot_simulation navigation_icp.launch.py
@@ -778,7 +774,7 @@ ros2 launch robot_simulation benchmark_icp.launch.py
 
 ---
 
-## Repository Structure
+## Repository 구조
 
 ```text
 ros2_icp_ekf_localization/
@@ -834,19 +830,19 @@ ros2_icp_ekf_localization/
 
 ---
 
-## Final KPI Summary
+## 최종 KPI 요약
 
 | KPI | Result |
 |---|---:|
-| Repeated benchmark runs | **4** |
+| 반복 Benchmark 횟수 | **4회** |
 | Wheel Odometry Position RMSE | **0.0704 ± 0.0108 m** |
 | ICP Position RMSE | **0.04288 ± 0.00022 m** |
 | ICP + EKF Position RMSE | **0.04211 ± 0.00021 m** |
-| Odom → ICP Position improvement | **39.1%** |
-| Odom → ICP+EKF Position improvement | **40.1%** |
+| Odom → ICP Position 개선율 | **39.1%** |
+| Odom → ICP+EKF Position 개선율 | **40.1%** |
 | ICP Yaw RMSE | **0.01279 ± 0.00016 rad** |
 | ICP + EKF Yaw RMSE | **0.00510 ± 0.00010 rad** |
-| ICP → EKF Yaw improvement | **60.1%** |
+| ICP → EKF Yaw 개선율 | **60.1%** |
 
 ---
 
@@ -865,9 +861,9 @@ ros2_icp_ekf_localization/
 
 ---
 
-## Conclusion
+## 결론
 
-The completed system demonstrates an end-to-end localization development workflow:
+이 프로젝트에서는 AMR localization 개발 과정을 처음부터 정량 평가까지 연결했습니다.
 
 ```text
 AMR Model
@@ -886,35 +882,34 @@ Nav2 Integration
    ↓
 Ground Truth Benchmark
    ↓
-Four-Run Quantitative Evaluation
+4회 반복 정량 평가
 ```
 
-Measured results show that:
+최종 결과:
 
-- **ICP is effective at suppressing accumulated wheel-odometry position drift**
-- **Most position improvement is achieved before EKF fusion**
-- **EKF provides the strongest improvement in yaw / heading stability**
-- **ICP and ICP+EKF results are repeatable under the same simulation benchmark**
+- **ICP는 Wheel Odometry의 누적 Position drift를 효과적으로 억제**
+- **Position 개선의 대부분은 ICP 단계에서 발생**
+- **EKF는 Yaw / Heading 안정화에서 가장 큰 효과**
+- **ICP와 ICP+EKF는 동일 simulation benchmark에서 반복적으로 유사한 성능을 확인**
 
-The current implementation is complete for the intended portfolio scope.
-
----
-
-## Future Work
-
-- Make EKF the sole `map -> odom` publisher
-- Use fused EKF pose directly for Nav2 localization
-- Add Mahalanobis gating for ICP measurement rejection
-- Add strict timestamp-aligned rosbag evaluation
-- Measure ICP / EKF mean and P95 processing time
-- Compare against AMCL / SLAM Toolbox localization
-- Replace brute-force nearest-neighbor search with a KD-tree or equivalent spatial index
-- Validate the same pipeline on physical hardware
+현재 구현은 포트폴리오에서 목표로 한 범위까지 완료되었습니다.
 
 ---
 
+## 향후 개선
 
-## Result Directory
+- EKF를 최종 `map -> odom` publisher로 변경
+- Nav2가 fused EKF localization을 직접 사용하도록 통합
+- ICP measurement rejection을 위한 Mahalanobis gating 추가
+- Strict timestamp-aligned rosbag offline evaluation
+- ICP / EKF mean / P95 processing time 측정
+- AMCL / SLAM Toolbox localization과 정량 비교
+- Brute-force nearest-neighbor를 KD-tree 또는 spatial index로 개선
+- 실제 AMR hardware에서 검증
+
+---
+
+## 결과 파일
 
 ```text
 results/benchmark_02/
@@ -934,21 +929,21 @@ results/benchmark_02/
 └── yaw_rmse_comparison.png
 ```
 
-## Documentation
+## 문서
 
-The previous development-oriented README can be preserved as:
+이전 개발 과정 중심 README는 다음 위치에 보관할 수 있습니다.
 
 ```text
 docs/README_DEVELOPMENT.md
 ```
 
-Detailed command history:
+실행 / 검증 명령어:
 
 ```text
 docs/COMMANDS.md
 ```
 
-Chronological development history:
+개발 단계별 이력:
 
 ```text
 docs/TIMELINE.md
